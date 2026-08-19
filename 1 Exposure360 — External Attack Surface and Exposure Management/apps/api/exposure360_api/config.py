@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     platform_max_requests_per_second: float = Field(default=100.0, gt=0, le=10_000)
     platform_max_concurrent_targets: int = Field(default=100, ge=1, le=10_000)
     platform_max_concurrent_requests: int = Field(default=200, ge=1, le=10_000)
+    discovery_checkpoint_batch_size: int = Field(default=100, ge=1, le=1_000)
+    discovery_stage_lease_seconds: int = Field(default=120, ge=1, le=3_600)
+    discovery_max_attempts: int = Field(default=3, ge=1, le=10)
 
 
 @lru_cache

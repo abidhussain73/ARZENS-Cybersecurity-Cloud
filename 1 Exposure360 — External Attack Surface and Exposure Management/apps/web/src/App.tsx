@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { type CurrentUser, type Phase1Api, phase1Api } from "./api";
+import { DiscoveryJobs } from "./DiscoveryJobs";
 import { beginAuthorization, validateCallbackState } from "./oidc";
 import { ScopeAdmin } from "./ScopeAdmin";
 
@@ -18,6 +19,9 @@ function authLabel(state: AuthState): string {
 export function App({ api = phase1Api, startAuthorization = beginAuthorization }: AppProps) {
   if (window.location.pathname.startsWith("/settings/scopes")) {
     return <ScopeAdmin />;
+  }
+  if (window.location.pathname.startsWith("/discovery/jobs")) {
+    return <DiscoveryJobs />;
   }
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [systemState, setSystemState] = useState<SystemState>("checking");

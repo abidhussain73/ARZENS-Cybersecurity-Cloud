@@ -24,3 +24,36 @@
 - [x] Produce the required Phase 2 design, security, evidence, and acceptance-report documents.
 - [x] Run the required real, non-mocked browser workflow against a deterministic FastAPI governance backend and record its result for EX360-T018.
 - [x] Add integration evidence for rejection and organization emergency-stop/resume audit actions with matching correlation IDs for EX360-T020.
+- [x] EX360-T021: Define CandidateAsset, DiscoverySource, source batch, checkpoint, and discovery error contracts with schema tests.
+- [x] EX360-T022: Implement the provider-neutral passive-source interface and deterministic recorded passive-DNS adapter.
+- [x] EX360-T023: Implement recorded certificate-metadata import, safe SAN/CN extraction, wildcard handling, and staging provenance.
+- [x] EX360-T024: Implement candidate deduplication, provenance-preserving upserts, and versioned deterministic confidence scoring.
+- [x] Verify EX360-T023 with an integration test that persists recorded certificate candidates through CandidateReconciliationService and asserts CandidateObservation provenance fields.
+- [x] EX360-T025: Implement scope-version-pinned discovery jobs, stages, checkpoints, truthful progress, and resumable worker orchestration.
+- [x] Verify real Celery task-entrypoint execution with SQLite, including stage transitions, durable terminal checkpoint, redelivery behavior, and finalization.
+- [x] Expose durable discovery progress for both unknown and known totals, with tests proving indeterminate and queued/remaining semantics.
+- [x] EX360-T026: Implement the ScopeGuard-first bounded DNS validation worker and special-address safety policy.
+- [x] EX360-T027: Complete the strictly allowlisted, timeout-bounded TCP connect collector with guarded transport tests.
+- [x] Add the real timeout-bounded TCP connector behind the fixture-tested connector interface.
+- [x] Prove excluded-IP connector call count is zero and execute TCP as a durable discovery worker stage with checkpoint/progress evidence.
+- [x] EX360-T028: Complete the guarded TLS metadata collector with fixture-based certificate and protocol evidence.
+- [x] EX360-T029: Implement the bounded HTTP metadata collector with manual redirect authorization and response-size enforcement.
+- [x] EX360-T030: Implement durable cancellation, bounded retry, dead-letter records, and interruption recovery.
+- [x] EX360-T031: Implement organization-isolated discovery job APIs, status/cancel/detail endpoints, OpenAPI, and audit events.
+- [x] EX360-T032: Implement discovery job list/detail/progress UI with accessible partial, degraded, cancelling, and cancelled states.
+- [x] Complete TLS collector worker-stage orchestration, certificate-field coverage, complete denial matrix, and retry/cancellation integration evidence.
+- [x] Gate TLS collection on previously successful TCP endpoint evidence and prove the end-to-end worker-stage handoff.
+- [x] Add real TLS connector no-network tests plus zero-handshake tests for out-of-scope, excluded, emergency-stop, policy, port, and schedule denials.
+- [x] Complete HTTP collector worker-stage orchestration with redirect re-authorization and bounded response metadata evidence.
+- [x] Apply and verify the Phase 3 migration and integrated fixture acceptance scenario on the AWS runtime.
+- [ ] Publish the final verified Phase 3 foundation to the protected GitHub repository and create the self-contained archive handoff.
+- [x] Create Phase 3 architecture, contract, safety, test, status, and acceptance documentation required by the authoritative specification.
+- [ ] Run the complete Phase 1/2/3 regression, fixture acceptance, AWS deployment verification, publication, and self-contained archive handoff.
+- [x] Implement the HTTP worker stage with ScopeGuard re-authorization for every redirect and endpoint-hint safety gate.
+- [x] Prove HTTP HEAD-first behavior, bounded GET fallback, redirect loop/limit handling, and excluded/out-of-scope redirect call count zero.
+- [x] Wire cancellation checks, bounded retries, and dead-letter replay into the worker execution path with end-to-end recovery tests.
+- [x] Implement discovery REST APIs with role checks, organization isolation, queue ID-only boundary, status/detail/cancel/dead-letter operations, and audit tests.
+- [x] Implement discovery UI pages with job list/detail, stage progress, indeterminate/partial/degraded/cancelling/cancelled states, and browser evidence.
+- [x] Apply migration 0004 and validate complete offline-safe fixture acceptance on AWS before GitHub publication and archive delivery.
+- [x] Obtain reproducible acceptance evidence for every remaining EX360-T028 through EX360-T032 requirement before any next-phase transition.
+- [ ] Verify the final source archive contains all required code, migrations, fixtures, documentation, and offline installation materials.
