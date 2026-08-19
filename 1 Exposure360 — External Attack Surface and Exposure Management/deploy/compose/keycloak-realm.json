@@ -1,0 +1,74 @@
+{
+  "realm": "exposure360",
+  "enabled": true,
+  "clientScopes": [
+    {
+      "name": "exposure360-phase1-api",
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "subject",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "exposure360-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "exposure360-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "exposure360-web",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*", "http://127.0.0.1:8080/*", "http://localhost:8080/*"],
+      "webOrigins": ["http://localhost:8080"],
+      "defaultClientScopes": ["exposure360-phase1-api"],
+      "attributes": {"pkce.code.challenge.method": "S256"}
+    }
+  ],
+  "users": [
+    {
+      "id": "e3600000-0000-4000-8000-000000000001",
+      "username": "alice",
+      "email": "alice@local.invalid",
+      "firstName": "Alice",
+      "lastName": "Local",
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "local-alice-only", "temporary": false}]
+    },
+    {
+      "id": "e3600000-0000-4000-8000-000000000002",
+      "username": "bob",
+      "email": "bob@local.invalid",
+      "firstName": "Bob",
+      "lastName": "Local",
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "local-bob-only", "temporary": false}]
+    },
+    {
+      "id": "e3600000-0000-4000-8000-000000000003",
+      "username": "coordinator",
+      "email": "coordinator@local.invalid",
+      "firstName": "Coordinator",
+      "lastName": "Local",
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "local-coordinator-only", "temporary": false}]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+project:
+  name: exposure360
+  version: 0.1.0
+  api_version: v1
+  phase: 1
+services: [web, api, worker, scheduler]
+datastores: [postgresql, redis, s3-compatible-object-storage]
+identity:
+  protocol: oidc
+  provider: keycloak-local-development
+migrations:
+  tool: alembic
+  head: 0002_membership_timestamps
+interfaces:
+  openapi: docs/api/openapi.json
+health:
+  liveness: /health/live
+  readiness: /health/ready

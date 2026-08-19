@@ -1,0 +1,8 @@
+/apps/api/ @backend-reviewer
+/apps/worker/ @backend-reviewer
+/apps/web/ @frontend-reviewer
+/src/security/ @security-reviewer
+/migrations/ @data-reviewer
+/deploy/ @operations-reviewer
+/.github/ @technical-lead
+
