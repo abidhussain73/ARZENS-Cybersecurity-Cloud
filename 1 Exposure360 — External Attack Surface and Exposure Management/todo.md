@@ -56,4 +56,4 @@
 - [x] Implement discovery UI pages with job list/detail, stage progress, indeterminate/partial/degraded/cancelling/cancelled states, and browser evidence.
 - [x] Apply migration 0004 and validate complete offline-safe fixture acceptance on AWS before GitHub publication and archive delivery.
 - [x] Obtain reproducible acceptance evidence for every remaining EX360-T028 through EX360-T032 requirement before any next-phase transition.
-- [ ] Verify the final source archive contains all required code, migrations, fixtures, documentation, and offline installation materials.
+- [x] Verify the final source archive contains all required code, migrations, fixtures, documentation, and offline installation materials.
