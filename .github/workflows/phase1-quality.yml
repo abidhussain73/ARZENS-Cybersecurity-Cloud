@@ -1,0 +1,34 @@
+name: phase-1-quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/api" && uv sync --locked && uv run ruff check . && uv run ruff format --check . && uv run mypy exposure360_api && uv run pytest
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: "1 Exposure360 — External Attack Surface and Exposure Management/apps/web/pnpm-lock.yaml"
+      - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/web" && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+      - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/web" && pnpm exec playwright install --with-deps chromium && pnpm test:e2e
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cd "1 Exposure360 — External Attack Surface and Exposure Management" && docker compose config --quiet
