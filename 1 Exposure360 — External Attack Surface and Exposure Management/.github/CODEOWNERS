@@ -1,8 +1,7 @@
-/apps/api/ @backend-reviewer
-/apps/worker/ @backend-reviewer
-/apps/web/ @frontend-reviewer
-/src/security/ @security-reviewer
-/migrations/ @data-reviewer
-/deploy/ @operations-reviewer
-/.github/ @technical-lead
-
+/apps/api/ @abidhussain73
+/apps/worker/ @abidhussain73
+/apps/web/ @abidhussain73
+/src/security/ @abidhussain73
+/migrations/ @abidhussain73
+/deploy/ @abidhussain73
+/.github/ @abidhussain73
