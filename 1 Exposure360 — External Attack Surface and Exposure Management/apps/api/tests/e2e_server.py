@@ -1,13 +1,14 @@
 import os
 import sys
 import uuid
+from pathlib import Path
 
 import uvicorn
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-sys.path.insert(0, "/home/ubuntu/exposure360-phase1-foundation/apps/api")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 _ENVIRONMENT = {
     "APP_ENV": "test",
