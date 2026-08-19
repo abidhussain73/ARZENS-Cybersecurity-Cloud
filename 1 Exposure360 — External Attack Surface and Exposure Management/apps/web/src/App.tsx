@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { type CurrentUser, type Phase1Api, phase1Api } from "./api";
 import { beginAuthorization, validateCallbackState } from "./oidc";
+import { ScopeAdmin } from "./ScopeAdmin";
 
 type AuthState = "loading" | "unauthenticated" | "authenticated" | "permission-denied" | "error";
 type SystemState = "checking" | "available" | "unavailable";
@@ -15,6 +16,9 @@ function authLabel(state: AuthState): string {
 }
 
 export function App({ api = phase1Api, startAuthorization = beginAuthorization }: AppProps) {
+  if (window.location.pathname.startsWith("/settings/scopes")) {
+    return <ScopeAdmin />;
+  }
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [systemState, setSystemState] = useState<SystemState>("checking");
   const [organization, setOrganization] = useState("No organization selected");

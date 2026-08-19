@@ -13,9 +13,16 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
     launchOptions: systemChromium ? { executablePath: systemChromium } : undefined,
   },
-  webServer: {
-    command: "pnpm exec vite --host 127.0.0.1 --port 4173",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: true,
-  },
+  webServer: [
+    {
+      command: "cd ../api && uv run python tests/e2e_server.py",
+      url: "http://127.0.0.1:8001/health/live",
+      reuseExistingServer: true,
+    },
+    {
+      command: "PLAYWRIGHT_API_URL=http://127.0.0.1:8001 ./node_modules/.bin/vite --host 127.0.0.1 --port 4173",
+      url: "http://127.0.0.1:4173",
+      reuseExistingServer: true,
+    },
+  ],
 });

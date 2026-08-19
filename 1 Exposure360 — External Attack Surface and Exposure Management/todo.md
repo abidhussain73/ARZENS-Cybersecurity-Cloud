@@ -11,3 +11,16 @@
 - [x] Enable and verify the documented protected-`main` controls after the public visibility change.
 - [x] Publish root-level GitHub Actions and ownership metadata so the protected branch’s required checks can execute.
 - [x] Re-verify the public repository’s required checks, review controls, code-owner review, force-push block, and deletion block.
+- [x] EX360-T011: Model Scope, ScopeVersion, Seed, Exclusion, ScanPolicy, ScopeApproval, and emergency-stop state with migration and unit tests.
+- [x] EX360-T012: Implement CIDR, domain, and ASN seed validation with canonical normalization and boundary tests.
+- [x] EX360-T013: Implement exclusion precedence and overlap detection with conflicting-range tests.
+- [x] EX360-T014: Implement immutable approval records and active approved-version selection.
+- [x] EX360-T015: Implement protocol, rate, schedule-window, and concurrency policy evaluation.
+- [x] EX360-T016: Implement organization and scope emergency-stop controls that stop new and running work safely.
+- [x] EX360-T017: Create organization-scoped governance APIs with integration and OpenAPI evidence.
+- [x] EX360-T018: Create the Phase 2 scope-administration UI with browser E2E coverage.
+- [x] EX360-T019: Implement the default-deny scope guard and prove a test connector blocks out-of-scope targets before network execution.
+- [x] EX360-T020: Add and verify audit events for scope lifecycle and emergency-stop actions.
+- [x] Produce the required Phase 2 design, security, evidence, and acceptance-report documents.
+- [x] Run the required real, non-mocked browser workflow against a deterministic FastAPI governance backend and record its result for EX360-T018.
+- [x] Add integration evidence for rejection and organization emergency-stop/resume audit actions with matching correlation IDs for EX360-T020.

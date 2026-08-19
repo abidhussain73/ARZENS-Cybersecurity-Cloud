@@ -16,6 +16,7 @@ from .audit import write_audit_event
 from .auth import current_principal
 from .config import get_settings
 from .db import get_session
+from .governance_api import router as governance_router
 from .jobs import get_celery_client
 from .logging import configure_logging
 from .models import Membership, Organization
@@ -34,6 +35,7 @@ logger = structlog.get_logger(__name__)
 tracer = configure_tracing(settings, "exposure360-api")
 celery_client = get_celery_client(settings)
 app = FastAPI(title="Exposure360 Phase 1 API", version="0.1.0", openapi_url="/api/v1/openapi.json")
+app.include_router(governance_router)
 FastAPIInstrumentor.instrument_app(app)
 HTTP_REQUESTS = Counter(
     "exposure360_http_requests_total", "HTTP requests", ["method", "route", "status"]
