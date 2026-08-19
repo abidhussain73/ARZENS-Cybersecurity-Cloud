@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: "1 Exposure360 — External Attack Surface and Exposure Management/apps/web/pnpm-lock.yaml"
+      - uses: astral-sh/setup-uv@v5
+      - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/api" && uv sync --locked
       - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/web" && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test && pnpm build
       - run: cd "1 Exposure360 — External Attack Surface and Exposure Management/apps/web" && pnpm exec playwright install --with-deps chromium && pnpm test:e2e
 
