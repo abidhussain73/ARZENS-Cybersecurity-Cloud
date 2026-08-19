@@ -28,6 +28,6 @@
 
 ## Final Gate
 
-**PHASE 2 ACCEPTED FOR THE IMPLEMENTED EX360-T011 THROUGH EX360-T020 BOUNDARY.** The final local gate reports 70 backend tests, 9 frontend unit tests, and 3 browser tests passing. The required browser acceptance scenario exercised a deterministic real FastAPI governance backend without browser route stubs. The AWS API and web containers have been rebuilt and the API reports health, readiness, migration head, and governance OpenAPI routes successfully.
+**PHASE 2 ACCEPTED FOR THE IMPLEMENTED EX360-T011 THROUGH EX360-T020 BOUNDARY.** The final local gate reports 70 backend tests, 9 frontend unit tests, and 3 browser tests passing. The required browser acceptance scenario exercised a deterministic real FastAPI governance backend without browser route stubs. The AWS API and web containers have been rebuilt and the API reports health, readiness, migration head, and governance OpenAPI routes successfully. The published repository’s required hosted checks are also successful in GitHub Actions run [`32244201235`](https://github.com/abidhussain73/ARZENS-Cybersecurity-Cloud/actions/runs/32244201235).
 
 This acceptance does **not** authorize Phase 3. No active discovery connector, DNS resolution, HTTP probing, or active network scanning was implemented.
