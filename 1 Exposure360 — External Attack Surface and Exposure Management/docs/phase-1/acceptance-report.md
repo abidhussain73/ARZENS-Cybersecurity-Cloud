@@ -1,19 +1,19 @@
 # Exposure360 Strict Phase 1 Acceptance Report
 
-**Assessment timestamp:** 2026-08-19T09:00:00Z  
+**Assessment timestamp:** 2026-08-19T09:39:22Z  
 **Assessed package:** `exposure360-phase1-foundation`  
 **Validation environment:** User-supplied Ubuntu AWS host, private loopback service bindings  
 **Phase boundary:** `EX360-T001` through `EX360-T010` only
 
 ## Determination
 
-> **LOCAL PHASE 1 ACCEPTED.** All ten strict Phase 1 engineering tasks have executable evidence. The only follow-up outside the package is repository-host branch protection, which is intentionally documented as an administrator-controlled manual action rather than misrepresented as active.
+> **PHASE 1 FULLY ACCEPTED.** All ten strict Phase 1 engineering tasks have executable evidence, including the hosted-repository governance controls that were previously external follow-up work.
 
 No Phase 2 scope governance, discovery, asset intelligence, finding, risk, reporting, or remediation capability has been implemented in this isolated package.
 
 | Task | Determination | Verified evidence |
 |---|---|---|
-| EX360-T001 | PASS, with remote admin follow-up | Local Git clone succeeded; README, CODEOWNERS, `.gitignore`, CI, and no tracked environment/key files were checked. The branch-protection configuration is recorded precisely. |
+| EX360-T001 | PASS | The hosted public repository and requested project folder are verified; root CI completed successfully; and protected `main` enforces required checks, review, code-owner review, stale-approval dismissal, linear history, blocked force pushes, and blocked deletion. |
 | EX360-T002 | PASS | `uv.lock` exists. Locked Ruff, formatter, mypy, pytest, application startup, and locked API/worker image builds passed. |
 | EX360-T003 | PASS | Pinned `pnpm-lock.yaml`; ESLint, strict TypeScript, Vitest/RTL, Vite build, and Playwright browser-shell test passed. |
 | EX360-T004 | PASS | All nine Compose services are running; API, PostgreSQL, Redis, Keycloak, MinIO, worker, scheduler, web, and Collector checks passed. |
@@ -45,9 +45,9 @@ The browser shell uses a typed API boundary and prepares Authorization Code plus
 
 Structured JSON logs use a recursive redaction helper for authorization, cookie, token, password, secret, API-key, and database-URL fields. Development-only identity and storage fixture values are not production credentials. The final operator must supply environment-specific production secrets through an approved secret-management path rather than modifying the checked-in template.
 
-## Required External Follow-Up
+## Hosted Governance Completion
 
-The repository does not yet have a hosted remote managed by this workflow. Before team handoff, an authorized repository administrator must apply the exact `main` branch-protection settings in [branch-protection.md](../operations/branch-protection.md). This is an external governance control; it does not invalidate the implemented local Phase 1 runtime, but it must not be omitted during repository hosting.
+The public repository is available at [ARZENS Cybersecurity Cloud](https://github.com/abidhussain73/ARZENS-Cybersecurity-Cloud). The Exposure360 source package is intentionally located in `1 Exposure360 — External Attack Surface and Exposure Management/`, while root-level GitHub Actions and CODEOWNERS metadata make the required CI and review controls executable. Hosted run [`32237622635`](https://github.com/abidhussain73/ARZENS-Cybersecurity-Cloud/actions/runs/32237622635) completed `backend-quality`, `frontend-quality`, and `compose-config` successfully. The complete protection policy and pull-request enforcement evidence are recorded in [branch-protection.md](../operations/branch-protection.md) and [test evidence](test-evidence.md).
 
 ## Reproducibility and Offline Boundary
 
