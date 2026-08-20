@@ -1,0 +1,19 @@
+schema_version: 1
+rule_id: tech.fixture-web
+rule_version: 1
+name: Fixture Web Server
+technology:
+  vendor: Fixture
+  product: FixtureWeb
+  category: web_server
+applies_to:
+  - HTTP
+confidence: 0.80
+match:
+  all:
+    - field: http.headers.server
+      operator: contains_ci
+      value: FixtureWeb
+version_extraction:
+  field: http.headers.server
+  pattern: 'FixtureWeb/(?P<version>[0-9.]+)'

@@ -3,15 +3,35 @@ name = "exposure360-api"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-  "alembic==1.14.1", "celery==5.4.0", "fastapi==0.115.6", "httpx==0.28.1",
-  "opentelemetry-api==1.29.0", "opentelemetry-exporter-otlp-proto-http==1.29.0",
-  "opentelemetry-instrumentation-fastapi==0.50b0", "opentelemetry-sdk==1.29.0",
+  "alembic==1.14.1",
+  "boto3==1.35.91",
+  "celery==5.4.0",
+  "fastapi==0.115.6",
+  "httpx==0.28.1",
+  "opentelemetry-api==1.29.0",
+  "opentelemetry-exporter-otlp-proto-http==1.29.0",
+  "opentelemetry-instrumentation-fastapi==0.50b0",
+  "opentelemetry-sdk==1.29.0",
   "prometheus-client==0.21.1",
-  "psycopg[binary]==3.2.3", "pydantic-settings==2.7.0", "pyjwt[crypto]==2.10.1",
-  "redis==5.2.1", "sqlalchemy==2.0.36", "structlog==24.4.0", "uvicorn[standard]==0.34.0"
+  "psycopg[binary]==3.2.3",
+  "pydantic-settings==2.7.0",
+  "pyjwt[crypto]==2.10.1",
+  "pyyaml==6.0.2",
+  "redis==5.2.1",
+  "regex==2024.11.6",
+  "sqlalchemy==2.0.36",
+  "structlog==24.4.0",
+  "uvicorn[standard]==0.34.0",
 ]
 [dependency-groups]
-dev = ["mypy==1.13.0", "pytest==8.3.4", "pytest-asyncio==0.25.0", "ruff==0.8.3"]
+dev = [
+    "mypy==1.13.0",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "ruff==0.8.3",
+    "types-pyyaml==6.0.12.20241230",
+    "types-regex==2024.11.6.20241221",
+]
 [tool.ruff]
 line-length = 100
 target-version = "py312"

@@ -1,0 +1,16 @@
+schema_version: 1
+rule_id: tech.fixture-service
+rule_version: 1
+name: Fixture Application Protocol
+technology:
+  vendor: Fixture
+  product: FixtureService
+  category: application_protocol
+applies_to:
+  - SERVICE
+confidence: 0.70
+match:
+  all:
+    - field: service.application_protocol
+      operator: equals_ci
+      value: fixture-proto
