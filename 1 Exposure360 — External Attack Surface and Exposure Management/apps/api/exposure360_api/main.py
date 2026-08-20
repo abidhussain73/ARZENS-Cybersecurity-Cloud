@@ -15,10 +15,12 @@ from starlette.middleware.base import RequestResponseEndpoint
 from .audit import write_audit_event
 from .auth import current_principal
 from .canonical_api import router as canonical_asset_router
+from .changes_api import router as changes_router
 from .config import get_settings
 from .db import get_session
 from .discovery_api import router as discovery_router
 from .evidence_api import router as evidence_router
+from .findings_api import router as findings_router
 from .governance_api import router as governance_router
 from .jobs import get_celery_client
 from .logging import configure_logging
@@ -42,6 +44,8 @@ app.include_router(governance_router)
 app.include_router(discovery_router)
 app.include_router(evidence_router)
 app.include_router(canonical_asset_router)
+app.include_router(findings_router)
+app.include_router(changes_router)
 FastAPIInstrumentor.instrument_app(app)
 HTTP_REQUESTS = Counter(
     "exposure360_http_requests_total", "HTTP requests", ["method", "route", "status"]

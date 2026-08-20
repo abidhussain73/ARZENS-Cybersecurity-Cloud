@@ -17,6 +17,7 @@ from sqlalchemy import (
     event,
     func,
     inspect,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -1209,6 +1210,340 @@ class FingerprintEvidenceLink(Base):
     observation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     evidence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     link_key: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ExposureRuleVersion(Base):
+    __tablename__ = "exposure_rule_versions"
+    __table_args__ = (
+        UniqueConstraint("rule_id", "rule_version", name="uq_exposure_rule_id_version"),
+        CheckConstraint(
+            "severity IN ('INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')",
+            name="ck_exposure_rule_severity",
+        ),
+        CheckConstraint(
+            "activation_state IN ('ACTIVE', 'DISABLED', 'DEPRECATED')",
+            name="ck_exposure_rule_activation_state",
+        ),
+        CheckConstraint(
+            "base_confidence >= 0 AND base_confidence <= 1",
+            name="ck_exposure_rule_base_confidence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(512))
+    category: Mapped[str] = mapped_column(String(128))
+    severity: Mapped[str] = mapped_column(String(16))
+    base_confidence: Mapped[float] = mapped_column(Float)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    activation_state: Mapped[str] = mapped_column(String(16))
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "fingerprint", name="uq_finding_org_fingerprint"),
+        UniqueConstraint("id", "organization_id", name="uq_finding_id_org"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_finding_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["service_asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_finding_service_asset_org",
+        ),
+        CheckConstraint(
+            "state IN ('OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', "
+            "'RESOLVED_PENDING_VERIFICATION', 'CLOSED', 'EXCEPTION')",
+            name="ck_finding_state",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_finding_confidence"),
+        Index("ix_findings_org_state_seen", "organization_id", "state", "last_seen"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    service_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    rule_hash: Mapped[str] = mapped_column(String(64))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(128))
+    rule_severity: Mapped[str] = mapped_column(String(16))
+    confidence: Mapped[float] = mapped_column(Float)
+    state: Mapped[str] = mapped_column(String(32), default="OPEN")
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    in_progress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_pending_verification_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exception_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    assigned_owner_reference: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exception_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class FindingEvidenceLink(Base):
+    __tablename__ = "finding_evidence_links"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "link_key", name="uq_finding_evidence_link_org_key"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_evidence_link_finding_org",
+        ),
+        ForeignKeyConstraint(
+            ["evidence_id", "organization_id"],
+            ["evidence.id", "evidence.organization_id"],
+            name="fk_finding_evidence_link_evidence_org",
+        ),
+        ForeignKeyConstraint(
+            ["observation_id", "organization_id"],
+            ["canonical_observations.id", "canonical_observations.organization_id"],
+            name="fk_finding_evidence_link_observation_org",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    link_key: Mapped[str] = mapped_column(String(64))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FindingEvaluationEvent(Base):
+    __tablename__ = "finding_evaluation_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_evaluation_finding_org",
+        ),
+        Index("ix_finding_evaluation_events_finding_time", "finding_id", "evaluated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    evaluation_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_version: Mapped[int] = mapped_column(Integer)
+    matched: Mapped[bool] = mapped_column(Boolean)
+    confidence: Mapped[float] = mapped_column(Float)
+    evidence_set_hash: Mapped[str] = mapped_column(String(64))
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class FindingStateEvent(Base):
+    __tablename__ = "finding_state_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_state_event_finding_org",
+        ),
+        Index("ix_finding_state_events_finding_time", "finding_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    from_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    to_state: Mapped[str] = mapped_column(String(32))
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssetSnapshot(Base):
+    __tablename__ = "asset_snapshots"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_asset_snapshot_id_org"),
+        UniqueConstraint(
+            "asset_id", "effective_at", "snapshot_hash", name="uq_asset_snapshot_identity"
+        ),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_asset_snapshot_asset_org",
+        ),
+        Index("ix_asset_snapshots_asset_effective", "asset_id", "effective_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    snapshot_schema_version: Mapped[int] = mapped_column(Integer)
+    snapshot_hash: Mapped[str] = mapped_column(String(64))
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source_evaluation_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChangeEvent(Base):
+    __tablename__ = "change_events"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "fingerprint", name="uq_change_event_org_fingerprint"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_change_event_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["from_snapshot_id", "organization_id"],
+            ["asset_snapshots.id", "asset_snapshots.organization_id"],
+            name="fk_change_event_from_snapshot_org",
+        ),
+        ForeignKeyConstraint(
+            ["to_snapshot_id", "organization_id"],
+            ["asset_snapshots.id", "asset_snapshots.organization_id"],
+            name="fk_change_event_to_snapshot_org",
+        ),
+        ForeignKeyConstraint(
+            ["approved_change_id", "organization_id"],
+            ["approved_changes.id", "approved_changes.organization_id"],
+            name="fk_change_event_approved_change_org",
+        ),
+        CheckConstraint(
+            "change_type IN ('NEW', 'REMOVED', 'SERVICE', 'CERTIFICATE', "
+            "'OWNERSHIP', 'FINGERPRINT')",
+            name="ck_change_event_type",
+        ),
+        CheckConstraint(
+            "state IN ('OBSERVED', 'EXPECTED', 'REVIEWED')", name="ck_change_event_state"
+        ),
+        Index("ix_change_events_org_state_seen", "organization_id", "state", "last_seen"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    change_type: Mapped[str] = mapped_column(String(16))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    from_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    to_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    summary: Mapped[str] = mapped_column(String(1024))
+    details_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    state: Mapped[str] = mapped_column(String(16), default="OBSERVED")
+    significance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    significance_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    significance_factors_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    approved_change_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ApprovedChange(Base):
+    __tablename__ = "approved_changes"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_approved_change_id_org"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_approved_change_asset_org",
+        ),
+        CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_approved_change_status"),
+        CheckConstraint("starts_at < ends_at", name="ck_approved_change_window"),
+        Index("ix_approved_changes_org_window", "organization_id", "starts_at", "ends_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    allowed_change_types_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    component_selector_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str] = mapped_column(Text)
+    ticket_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_evaluation_run_id_org"),
+        CheckConstraint(
+            "run_type IN ('EXPOSURE_RULE_EVALUATION', 'ASSET_SNAPSHOT_BUILD', "
+            "'CHANGE_DETECTION', 'EXCEPTION_EXPIRY')",
+            name="ck_evaluation_run_type",
+        ),
+        CheckConstraint(
+            "state IN ('QUEUED', 'RUNNING', 'PARTIAL', 'COMPLETED', 'FAILED', 'CANCELLED')",
+            name="ck_evaluation_run_state",
+        ),
+        Index("ix_evaluation_runs_org_type_state", "organization_id", "run_type", "state"),
+        Index(
+            "uq_evaluation_runs_one_running",
+            "organization_id",
+            "run_type",
+            unique=True,
+            postgresql_where="state = 'RUNNING'",
+            sqlite_where=text("state = 'RUNNING'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    run_type: Mapped[str] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(16), default="QUEUED")
+    ruleset_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snapshot_schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    significance_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assets_processed: Mapped[int] = mapped_column(Integer, default=0)
+    findings_matched: Mapped[int] = mapped_column(Integer, default=0)
+    findings_created: Mapped[int] = mapped_column(Integer, default=0)
+    findings_updated: Mapped[int] = mapped_column(Integer, default=0)
+    snapshots_created: Mapped[int] = mapped_column(Integer, default=0)
+    changes_created: Mapped[int] = mapped_column(Integer, default=0)
+    changes_suppressed: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(64), index=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     discovery_max_attempts: int = Field(default=3, ge=1, le=10)
     evidence_max_object_bytes: int = Field(default=10_485_760, ge=1, le=1_073_741_824)
     evidence_signed_url_ttl_seconds: int = Field(default=300, ge=1, le=300)
+    exposure_evaluation_interval: int = Field(default=3_600, ge=60, le=604_800)
+    snapshot_interval: int = Field(default=3_600, ge=60, le=604_800)
+    change_detection_interval: int = Field(default=3_600, ge=60, le=604_800)
+    exception_expiry_interval: int = Field(default=3_600, ge=60, le=604_800)
     objectstore_server_side_encryption: str | None = None
 
 

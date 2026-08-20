@@ -1,0 +1,19 @@
+schema_version: 1
+rule_id: exposure.http.missing_hsts
+rule_version: 1
+title: HTTPS response missing HSTS
+description: An observed HTTPS response did not include Strict-Transport-Security metadata.
+category: HTTP_SECURITY_HEADER
+severity: MEDIUM
+activation_state: ACTIVE
+applies_to:
+  asset_types: [SERVICE]
+  observation_types: [HTTP_RESPONSE]
+confidence: {base: 0.90}
+condition:
+  all:
+    - {field: service.application_protocol, operator: equals, value: HTTPS}
+    - {field: http.headers.strict_transport_security, operator: not_exists}
+evidence_fields: [http.status_code, http.headers.strict_transport_security]
+recommendation_hint: Review whether HSTS should be enabled for the observed HTTPS service.
+metadata: {tags: [externally-observable]}

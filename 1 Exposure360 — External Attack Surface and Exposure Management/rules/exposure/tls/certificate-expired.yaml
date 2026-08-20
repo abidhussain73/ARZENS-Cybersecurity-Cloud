@@ -1,0 +1,18 @@
+schema_version: 1
+rule_id: exposure.tls.certificate_expired
+rule_version: 1
+title: TLS certificate is expired
+description: An observed certificate has a not-after timestamp before the explicit evaluation time.
+category: TLS_CERTIFICATE
+severity: HIGH
+activation_state: ACTIVE
+applies_to:
+  asset_types: [SERVICE]
+  observation_types: [TLS_CERTIFICATE]
+confidence: {base: 0.95}
+condition:
+  all:
+    - {field: tls.certificate.not_after, operator: before, value: evaluation_time}
+evidence_fields: [tls.certificate.not_after]
+recommendation_hint: Review the certificate renewal state for the observed service.
+metadata: {tags: [externally-observable]}
