@@ -31,35 +31,49 @@ class ChangeDetector:
             return ()
         if previous is None:
             assert current is not None
-            asset = cast(dict[str, object], current["asset"])
-            return (DetectedChange("NEW", str(asset["canonical_key"]), None, current),)
+            normalized_current = _normalize_snapshot(current)
+            asset = cast(dict[str, object], normalized_current["asset"])
+            return (DetectedChange("NEW", str(asset["canonical_key"]), None, normalized_current),)
         if current is None:
-            asset = cast(dict[str, object], previous["asset"])
-            return (DetectedChange("REMOVED", str(asset["canonical_key"]), previous, None),)
-        if previous.get("schema_version") != current.get("schema_version"):
+            normalized_previous = _normalize_snapshot(previous)
+            asset = cast(dict[str, object], normalized_previous["asset"])
+            return (
+                DetectedChange("REMOVED", str(asset["canonical_key"]), normalized_previous, None),
+            )
+        normalized_previous = _normalize_snapshot(previous)
+        normalized_current = _normalize_snapshot(current)
+        if normalized_previous.get("schema_version") != normalized_current.get("schema_version"):
             raise ValueError("incompatible snapshot schema versions")
         changes: list[DetectedChange] = []
-        if previous.get("ownership") != current.get("ownership"):
+        if normalized_previous.get("ownership") != normalized_current.get("ownership"):
             changes.append(
                 DetectedChange(
-                    "OWNERSHIP", "ownership", previous.get("ownership"), current.get("ownership")
+                    "OWNERSHIP",
+                    "ownership",
+                    normalized_previous.get("ownership"),
+                    normalized_current.get("ownership"),
                 )
             )
-        if previous.get("technologies") != current.get("technologies"):
+        if normalized_previous.get("technologies") != normalized_current.get("technologies"):
             changes.append(
                 DetectedChange(
                     "FINGERPRINT",
                     "technologies",
-                    previous.get("technologies"),
-                    current.get("technologies"),
+                    normalized_previous.get("technologies"),
+                    normalized_current.get("technologies"),
                 )
             )
-        if previous.get("services") != current.get("services"):
-            changes.append(
-                DetectedChange(
-                    "SERVICE", "services", previous.get("services"), current.get("services")
-                )
+        old_services = normalized_previous.get("services")
+        new_services = normalized_current.get("services")
+        if _certificate_projections(old_services) == _certificate_projections(new_services):
+            service_changed = old_services != new_services
+        else:
+            changes.append(DetectedChange("CERTIFICATE", "certificate", old_services, new_services))
+            service_changed = _without_certificates(old_services) != _without_certificates(
+                new_services
             )
+        if service_changed:
+            changes.append(DetectedChange("SERVICE", "services", old_services, new_services))
         return tuple(changes)
 
 
@@ -124,3 +138,58 @@ def _fingerprint(asset_key: str, change_type: ChangeType, details: dict[str, obj
 
 def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _normalize_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
+    return cast(dict[str, object], _normalize_value(snapshot))
+
+
+def _normalize_value(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _normalize_value(item) for key, item in sorted(value.items())}
+    if isinstance(value, list | tuple):
+        return tuple(sorted((_normalize_value(item) for item in value), key=_canonical_json))
+    return value
+
+
+def _canonical_json(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def _certificate_projections(services: object) -> tuple[object, ...]:
+    normalized = cast(tuple[object, ...], services) if isinstance(services, tuple) else ()
+    projections: list[object] = []
+    for service in normalized:
+        if isinstance(service, dict) and "certificate_fingerprint" in service:
+            projections.append(
+                {
+                    "endpoint": service.get("endpoint"),
+                    "certificate_fingerprint": service.get("certificate_fingerprint"),
+                    "certificate_issuer": service.get("certificate_issuer"),
+                    "certificate_not_after": service.get("certificate_not_after"),
+                }
+            )
+    return tuple(sorted(projections, key=_canonical_json))
+
+
+def _without_certificates(services: object) -> object:
+    if not isinstance(services, tuple):
+        return services
+    stripped: list[object] = []
+    for service in services:
+        if isinstance(service, dict):
+            stripped.append(
+                {
+                    key: value
+                    for key, value in service.items()
+                    if key
+                    not in {
+                        "certificate_fingerprint",
+                        "certificate_issuer",
+                        "certificate_not_after",
+                    }
+                }
+            )
+        else:
+            stripped.append(service)
+    return tuple(sorted(stripped, key=_canonical_json))

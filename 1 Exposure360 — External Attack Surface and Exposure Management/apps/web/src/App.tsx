@@ -1,7 +1,10 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { type CurrentUser, type Phase1Api, phase1Api } from "./api";
+import { ApprovedChanges } from "./ApprovedChanges";
 import { Assets } from "./Assets";
+import { Changes } from "./Changes";
 import { DiscoveryJobs } from "./DiscoveryJobs";
+import { Findings } from "./Findings";
 import { beginAuthorization, validateCallbackState } from "./oidc";
 import { ScopeAdmin } from "./ScopeAdmin";
 
@@ -20,6 +23,15 @@ function authLabel(state: AuthState): string {
 export function App({ api = phase1Api, startAuthorization = beginAuthorization }: AppProps) {
   if (window.location.pathname.startsWith("/assets")) {
     return <Assets />;
+  }
+  if (window.location.pathname.startsWith("/findings")) {
+    return <Findings />;
+  }
+  if (window.location.pathname.startsWith("/changes")) {
+    return <Changes />;
+  }
+  if (window.location.pathname.startsWith("/settings/approved-changes")) {
+    return <ApprovedChanges />;
   }
   if (window.location.pathname.startsWith("/settings/scopes")) {
     return <ScopeAdmin />;

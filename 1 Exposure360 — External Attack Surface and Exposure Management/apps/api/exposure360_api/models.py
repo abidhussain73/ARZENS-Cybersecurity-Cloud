@@ -17,6 +17,7 @@ from sqlalchemy import (
     event,
     func,
     inspect,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -1383,6 +1384,7 @@ class FindingStateEvent(Base):
 class AssetSnapshot(Base):
     __tablename__ = "asset_snapshots"
     __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_asset_snapshot_id_org"),
         UniqueConstraint(
             "asset_id", "effective_at", "snapshot_hash", name="uq_asset_snapshot_identity"
         ),
@@ -1426,6 +1428,11 @@ class ChangeEvent(Base):
             ["asset_snapshots.id", "asset_snapshots.organization_id"],
             name="fk_change_event_to_snapshot_org",
         ),
+        ForeignKeyConstraint(
+            ["approved_change_id", "organization_id"],
+            ["approved_changes.id", "approved_changes.organization_id"],
+            name="fk_change_event_approved_change_org",
+        ),
         CheckConstraint(
             "change_type IN ('NEW', 'REMOVED', 'SERVICE', 'CERTIFICATE', "
             "'OWNERSHIP', 'FINGERPRINT')",
@@ -1451,11 +1458,93 @@ class ChangeEvent(Base):
     state: Mapped[str] = mapped_column(String(16), default="OBSERVED")
     significance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     significance_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    significance_factors_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
     approved_change_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class ApprovedChange(Base):
+    __tablename__ = "approved_changes"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_approved_change_id_org"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_approved_change_asset_org",
+        ),
+        CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="ck_approved_change_status"),
+        CheckConstraint("starts_at < ends_at", name="ck_approved_change_window"),
+        Index("ix_approved_changes_org_window", "organization_id", "starts_at", "ends_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    allowed_change_types_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    component_selector_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str] = mapped_column(Text)
+    ticket_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    approved_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_evaluation_run_id_org"),
+        CheckConstraint(
+            "run_type IN ('EXPOSURE_RULE_EVALUATION', 'ASSET_SNAPSHOT_BUILD', "
+            "'CHANGE_DETECTION', 'EXCEPTION_EXPIRY')",
+            name="ck_evaluation_run_type",
+        ),
+        CheckConstraint(
+            "state IN ('QUEUED', 'RUNNING', 'PARTIAL', 'COMPLETED', 'FAILED', 'CANCELLED')",
+            name="ck_evaluation_run_state",
+        ),
+        Index("ix_evaluation_runs_org_type_state", "organization_id", "run_type", "state"),
+        Index(
+            "uq_evaluation_runs_one_running",
+            "organization_id",
+            "run_type",
+            unique=True,
+            postgresql_where="state = 'RUNNING'",
+            sqlite_where=text("state = 'RUNNING'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    run_type: Mapped[str] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(16), default="QUEUED")
+    ruleset_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    snapshot_schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    significance_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assets_processed: Mapped[int] = mapped_column(Integer, default=0)
+    findings_matched: Mapped[int] = mapped_column(Integer, default=0)
+    findings_created: Mapped[int] = mapped_column(Integer, default=0)
+    findings_updated: Mapped[int] = mapped_column(Integer, default=0)
+    snapshots_created: Mapped[int] = mapped_column(Integer, default=0)
+    changes_created: Mapped[int] = mapped_column(Integer, default=0)
+    changes_suppressed: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(64), index=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 @event.listens_for(Evidence, "before_update")

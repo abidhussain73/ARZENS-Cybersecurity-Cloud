@@ -34,6 +34,7 @@ def upgrade() -> None:
             name="fk_asset_snapshot_asset_org",
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("id", "organization_id", name="uq_asset_snapshot_id_org"),
         sa.UniqueConstraint(
             "asset_id", "effective_at", "snapshot_hash", name="uq_asset_snapshot_identity"
         ),

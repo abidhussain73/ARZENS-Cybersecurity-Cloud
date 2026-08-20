@@ -32,11 +32,6 @@ services:
     build: {context: ., dockerfile: apps/worker/Dockerfile}
     env_file: deploy/compose/local.env.template
     depends_on: {redis: {condition: service_healthy}}
-  scheduler:
-    build: {context: ., dockerfile: apps/worker/Dockerfile}
-    env_file: deploy/compose/local.env.template
-    command: ["celery", "-A", "exposure360_worker.tasks.celery", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
-    depends_on: {redis: {condition: service_healthy}}
   web:
     build: {context: ., dockerfile: apps/web/Dockerfile}
     environment:
