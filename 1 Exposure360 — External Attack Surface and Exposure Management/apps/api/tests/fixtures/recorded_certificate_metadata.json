@@ -1,0 +1,25 @@
+{
+  "source": "fixture-certificate-metadata",
+  "records": [
+    {
+      "certificate_id": "fixture-cert-001",
+      "not_before": "2026-01-01T00:00:00Z",
+      "not_after": "2026-04-01T00:00:00Z",
+      "subject_cn": "www.example.com",
+      "dns_names": ["www.example.com", "api.example.com", "*.example.com", "outside.example.net", "bad domain"],
+      "issuer": "Fixture CA",
+      "serial": "010203",
+      "fingerprint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "2026-01-15T00:00:00Z"
+    },
+    {
+      "certificate_id": "fixture-cert-002",
+      "not_before": "2026-01-01T00:00:00Z",
+      "not_after": "2026-04-01T00:00:00Z",
+      "subject_cn": "portal.example.com",
+      "dns_names": [],
+      "issuer": "Fixture CA",
+      "observed_at": "2026-01-16T00:00:00Z"
+    }
+  ]
+}

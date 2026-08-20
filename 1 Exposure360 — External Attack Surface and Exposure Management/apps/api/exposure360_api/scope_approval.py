@@ -207,7 +207,7 @@ class ScopeApprovalService:
             raise ScopeStateError("Approval envelope is not authorized")
         if scope.status != "ACTIVE" or version.state != "APPROVED":
             raise ScopeStateError("Scope version is not active")
-        if approval.expires_at is not None and approval.expires_at <= now:
+        if approval.expires_at is not None and cls._as_utc(approval.expires_at) <= now:
             raise ScopeStateError("Approval has expired")
         current_hash = cls.content_hash(session, version)
         if current_hash != approval.content_hash or version.content_hash != approval.content_hash:
@@ -219,3 +219,9 @@ class ScopeApprovalService:
             approval_id=approval_id,
             policy_hash=approval.content_hash,
         )
+
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
