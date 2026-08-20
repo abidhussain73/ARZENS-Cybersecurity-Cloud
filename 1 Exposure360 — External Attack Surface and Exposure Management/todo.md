@@ -46,9 +46,9 @@
 - [x] Add real TLS connector no-network tests plus zero-handshake tests for out-of-scope, excluded, emergency-stop, policy, port, and schedule denials.
 - [x] Complete HTTP collector worker-stage orchestration with redirect re-authorization and bounded response metadata evidence.
 - [x] Apply and verify the Phase 3 migration and integrated fixture acceptance scenario on the AWS runtime.
-- [ ] Publish the final verified Phase 3 foundation to the protected GitHub repository and create the self-contained archive handoff.
+- [x] Publish the final verified Phase 3 foundation to the protected GitHub repository and create the self-contained archive handoff.
 - [x] Create Phase 3 architecture, contract, safety, test, status, and acceptance documentation required by the authoritative specification.
-- [ ] Run the complete Phase 1/2/3 regression, fixture acceptance, AWS deployment verification, publication, and self-contained archive handoff.
+- [x] Run the complete Phase 1/2/3 regression, fixture acceptance, AWS deployment verification, publication, and self-contained archive handoff.
 - [x] Implement the HTTP worker stage with ScopeGuard re-authorization for every redirect and endpoint-hint safety gate.
 - [x] Prove HTTP HEAD-first behavior, bounded GET fallback, redirect loop/limit handling, and excluded/out-of-scope redirect call count zero.
 - [x] Wire cancellation checks, bounded retries, and dead-letter replay into the worker execution path with end-to-end recovery tests.
@@ -57,3 +57,17 @@
 - [x] Apply migration 0004 and validate complete offline-safe fixture acceptance on AWS before GitHub publication and archive delivery.
 - [x] Obtain reproducible acceptance evidence for every remaining EX360-T028 through EX360-T032 requirement before any next-phase transition.
 - [x] Verify the final source archive contains all required code, migrations, fixtures, documentation, and offline installation materials.
+- [x] Make the protected GitHub Actions browser-E2E installation bounded and cache-friendly, then reverify all required publication checks.
+- [x] EX360-T033: Create canonical asset, identifier, domain, IP, ASN, endpoint, and service tables with migration and repository tests.
+- [x] EX360-T034: Implement organization-scoped asset identity keys and deterministic canonicalization/consolidation rules.
+- [x] EX360-T035: Implement first_seen, last_seen, and canonical asset lifecycle state updates from repeated observations.
+- [x] EX360-T036: Implement ownership records, confidence, provenance, and evidence linkage.
+- [x] EX360-T037: Create idempotent Observation and Evidence records with content hashes and source timestamps.
+- [x] EX360-T038: Implement immutable evidence object storage and signed, authorized retrieval with integrity verification.
+- [x] EX360-T039: Create technology fingerprint rules and versioned signature loading.
+- [x] EX360-T040: Implement HTTP, TLS, and service fingerprint evaluation with explainable confidence.
+- [x] EX360-T041: Create canonical asset list, detail, timeline, and direct relationship APIs with organization isolation.
+- [x] Produce authoritative Phase 4 documentation, acceptance evidence, and AWS runtime verification without starting Phase 5.
+- [ ] Produce all authoritative Phase 4 documentation, acceptance evidence, AWS runtime verification, protected GitHub publication, and a self-contained archive without starting Phase 5.
+- [x] EX360-T040: Aggregate independent fingerprint evidence deterministically without duplicate-evidence confidence inflation.
+- [x] EX360-T040: Preserve and expose competing same-category fingerprint results with explicit conflict visibility tests.

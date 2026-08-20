@@ -1,0 +1,7 @@
+# Fingerprint Confidence
+
+`FingerprintEvaluator` consumes only stored `CanonicalObservation.normalized_payload_json`; it imports no network client and creates no active request. A matching rule creates or updates a provenance-backed `TechnologyFingerprint` with `rule_id`, `rule_version`, `rule_hash`, `ruleset_hash`, the matched fields, and `FingerprintEvidenceLink` records.
+
+The current explainable model is versioned as **`phase4-fingerprint-v1`**. Each rule persists its validated `base_confidence` in `[0,1]`. For the same product/category context, the evaluator selects the strongest rule per independent matched field and combines those components deterministically as `1 − Π(1 − confidenceᵢ)`. Repeated evidence using an already represented field does not add another component or inflate confidence. The stored `confidence_components_json` identifies the field, rule, version, and base contribution for review.
+
+Repeated evaluation of the same fact uses a deterministic fingerprint key and does not duplicate the fingerprint or provenance link. A later observation advances `last_seen`; a differing version produces a distinct historic record rather than overwriting prior provenance. Different technologies or categories may coexist. Near-equal competing products in the same category are retained and marked `CONFLICT` rather than silently discarded. No exposure, vulnerability, severity, or Phase 5 conclusion is inferred.

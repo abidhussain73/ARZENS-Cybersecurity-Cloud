@@ -1,0 +1,16 @@
+schema_version: 1
+rule_id: tech.fixture-tls
+rule_version: 1
+name: Fixture TLS Service
+technology:
+  vendor: Fixture
+  product: FixtureTLS
+  category: tls_service
+applies_to:
+  - TLS
+confidence: 0.75
+match:
+  all:
+    - field: tls.alpn
+      operator: equals
+      value: h2

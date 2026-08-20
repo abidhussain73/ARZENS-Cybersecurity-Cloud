@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     discovery_checkpoint_batch_size: int = Field(default=100, ge=1, le=1_000)
     discovery_stage_lease_seconds: int = Field(default=120, ge=1, le=3_600)
     discovery_max_attempts: int = Field(default=3, ge=1, le=10)
+    evidence_max_object_bytes: int = Field(default=10_485_760, ge=1, le=1_073_741_824)
+    evidence_signed_url_ttl_seconds: int = Field(default=300, ge=1, le=300)
+    objectstore_server_side_encryption: str | None = None
 
 
 @lru_cache
