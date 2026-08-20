@@ -1,0 +1,19 @@
+schema_version: 1
+rule_id: exposure.ownership.missing_owner
+rule_version: 1
+title: Active externally observed asset has no resolved owner
+description: An active canonical asset has no primary ownership claim.
+category: OWNERSHIP
+severity: MEDIUM
+activation_state: ACTIVE
+applies_to:
+  asset_types: [DOMAIN, IP, ENDPOINT, SERVICE]
+  observation_types: [HTTP_RESPONSE, TLS_CERTIFICATE, TCP_REACHABILITY]
+confidence: {base: 0.80}
+condition:
+  all:
+    - {field: asset.lifecycle_state, operator: equals, value: ACTIVE}
+    - {field: ownership.primary_present, operator: equals, value: false}
+evidence_fields: [asset.lifecycle_state, ownership.primary_present]
+recommendation_hint: Review ownership assignment for the active externally observed asset.
+metadata: {tags: [externally-observable]}

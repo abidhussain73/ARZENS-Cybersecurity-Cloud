@@ -1212,6 +1212,201 @@ class FingerprintEvidenceLink(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ExposureRuleVersion(Base):
+    __tablename__ = "exposure_rule_versions"
+    __table_args__ = (
+        UniqueConstraint("rule_id", "rule_version", name="uq_exposure_rule_id_version"),
+        CheckConstraint(
+            "severity IN ('INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')",
+            name="ck_exposure_rule_severity",
+        ),
+        CheckConstraint(
+            "activation_state IN ('ACTIVE', 'DISABLED', 'DEPRECATED')",
+            name="ck_exposure_rule_activation_state",
+        ),
+        CheckConstraint(
+            "base_confidence >= 0 AND base_confidence <= 1",
+            name="ck_exposure_rule_base_confidence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(512))
+    category: Mapped[str] = mapped_column(String(128))
+    severity: Mapped[str] = mapped_column(String(16))
+    base_confidence: Mapped[float] = mapped_column(Float)
+    content_hash: Mapped[str] = mapped_column(String(64))
+    activation_state: Mapped[str] = mapped_column(String(16))
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "fingerprint", name="uq_finding_org_fingerprint"),
+        UniqueConstraint("id", "organization_id", name="uq_finding_id_org"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_finding_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["service_asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_finding_service_asset_org",
+        ),
+        CheckConstraint(
+            "state IN ('OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', "
+            "'RESOLVED_PENDING_VERIFICATION', 'CLOSED', 'EXCEPTION')",
+            name="ck_finding_state",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_finding_confidence"),
+        Index("ix_findings_org_state_seen", "organization_id", "state", "last_seen"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    service_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    rule_hash: Mapped[str] = mapped_column(String(64))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(128))
+    rule_severity: Mapped[str] = mapped_column(String(16))
+    confidence: Mapped[float] = mapped_column(Float)
+    state: Mapped[str] = mapped_column(String(32), default="OPEN")
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    in_progress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_pending_verification_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    exception_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    assigned_owner_reference: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exception_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class FindingEvidenceLink(Base):
+    __tablename__ = "finding_evidence_links"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "link_key", name="uq_finding_evidence_link_org_key"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_evidence_link_finding_org",
+        ),
+        ForeignKeyConstraint(
+            ["evidence_id", "organization_id"],
+            ["evidence.id", "evidence.organization_id"],
+            name="fk_finding_evidence_link_evidence_org",
+        ),
+        ForeignKeyConstraint(
+            ["observation_id", "organization_id"],
+            ["canonical_observations.id", "canonical_observations.organization_id"],
+            name="fk_finding_evidence_link_observation_org",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    evidence_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    link_key: Mapped[str] = mapped_column(String(64))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FindingEvaluationEvent(Base):
+    __tablename__ = "finding_evaluation_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_evaluation_finding_org",
+        ),
+        Index("ix_finding_evaluation_events_finding_time", "finding_id", "evaluated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    evaluation_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    rule_version: Mapped[int] = mapped_column(Integer)
+    matched: Mapped[bool] = mapped_column(Boolean)
+    confidence: Mapped[float] = mapped_column(Float)
+    evidence_set_hash: Mapped[str] = mapped_column(String(64))
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class FindingStateEvent(Base):
+    __tablename__ = "finding_state_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_finding_state_event_finding_org",
+        ),
+        Index("ix_finding_state_events_finding_time", "finding_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    from_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    to_state: Mapped[str] = mapped_column(String(32))
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssetSnapshot(Base):
+    __tablename__ = "asset_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "asset_id", "effective_at", "snapshot_hash", name="uq_asset_snapshot_identity"
+        ),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_asset_snapshot_asset_org",
+        ),
+        Index("ix_asset_snapshots_asset_effective", "asset_id", "effective_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    snapshot_schema_version: Mapped[int] = mapped_column(Integer)
+    snapshot_hash: Mapped[str] = mapped_column(String(64))
+    effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source_evaluation_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    snapshot_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)

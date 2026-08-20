@@ -71,3 +71,15 @@
 - [ ] Produce all authoritative Phase 4 documentation, acceptance evidence, AWS runtime verification, protected GitHub publication, and a self-contained archive without starting Phase 5.
 - [x] EX360-T040: Aggregate independent fingerprint evidence deterministically without duplicate-evidence confidence inflation.
 - [x] EX360-T040: Preserve and expose competing same-category fingerprint results with explicit conflict visibility tests.
+- [x] EX360-T042: Create Assets UI with inventory, detail, evidence, direct relationships, and history views with end-to-end drilldown coverage.
+- [x] EX360-T043: Define versioned exposure-rule schema, activation, and deterministic repository/loader validation.
+- [x] EX360-T044: Implement safe metadata-only exposure rule checks for externally observable unsafe service conditions.
+- [x] EX360-T045: Implement the evidence-backed finding lifecycle and reviewed state machine.
+- [x] EX360-T046: Implement deterministic finding deduplication, temporal first/last seen, and evidence linkage.
+- [ ] EX360-T047: Implement canonical asset snapshot representation and stable serialization.
+- [ ] EX360-T048: Implement deterministic new, removed, service, certificate, ownership, and fingerprint change detection.
+- [ ] EX360-T049: Implement approved-change suppression and explainable significance scoring with audit evidence.
+- [ ] EX360-T050: Create organization-safe Findings and Changes APIs with OpenAPI and integration coverage.
+- [ ] EX360-T051: Create Findings and Changes UI with filters, evidence access, review history, and end-to-end coverage.
+- [ ] EX360-T052: Add rule/change metrics and durable scheduled evaluation with idempotent run evidence.
+- [ ] Produce the required Phase 5 documentation, full regression evidence, AWS fixture acceptance, protected GitHub publication, and self-contained archive without starting Phase 6.
