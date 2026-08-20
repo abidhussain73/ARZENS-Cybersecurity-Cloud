@@ -4,7 +4,7 @@
 **Branch:** `phase5-development`  
 **Boundary:** EX360-T042 through EX360-T052; no Phase 6 work is permitted.
 
-All eleven implementation tasks are complete in the isolated development branch and have passed their local quality gates. The remaining delivery controls are AWS migration and self-cleaning fixture acceptance, protected GitHub publication, a collaborator-approved merge, and archive handoff.
+All eleven implementation tasks are complete, protected-main publication has been approved and merged, AWS acceptance has passed, and the self-contained archive has been verified with SHA-256 evidence. No Phase 6 work is included.
 
 | Delivery control | State | Evidence target |
 |---|---|---|
@@ -13,8 +13,8 @@ All eleven implementation tasks are complete in the isolated development branch 
 | Clean migration chain | Complete | AWS Alembic `0010_fingerprint_confidence` to `0017_evaluation_runs` head. |
 | AWS fixture acceptance | Complete | Self-cleaning Phase 5 script passed against the deployed Compose stack. |
 | External scheduler registration | Deployment-controlled | The worker heartbeat is externally invocable; the legacy in-process Beat container and all embedded schedules were removed. |
-| Protected GitHub publication | Pending | Phase 5 pull request, review, merge, and post-merge verification. |
-| Self-contained archive | Pending | Zip file and SHA-256 after the protected branch contains the verified release. |
+| Protected GitHub publication | Complete | PR [#4](https://github.com/abidhussain73/ARZENS-Cybersecurity-Cloud/pull/4) approved and merged to `main` at `9a496259728b5a06186a1a471e1eed3619ca8b4a`. |
+| Self-contained archive | Complete | `Exposure360_Phase_5_Complete.zip`, SHA-256 `c4f01901a243004203560c9bfcd270a6ba8dbd4ca1581ff4fbe7812b175e6398`; integrity test passed. |
 
 ## Local Evidence Summary
 

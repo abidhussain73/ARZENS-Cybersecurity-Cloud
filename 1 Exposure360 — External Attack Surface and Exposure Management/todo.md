@@ -82,5 +82,5 @@
 - [x] EX360-T050: Create organization-safe Findings and Changes APIs with OpenAPI and integration coverage.
 - [x] EX360-T051: Create Findings and Changes UI with filters, evidence access, review history, and end-to-end coverage.
 - [x] EX360-T052: Add rule/change metrics and durable scheduled evaluation with idempotent run evidence.
-- [ ] Produce the required Phase 5 documentation, full regression evidence, AWS fixture acceptance, protected GitHub publication, and self-contained archive without starting Phase 6.
+- [x] Produce the required Phase 5 documentation, full regression evidence, AWS fixture acceptance, protected GitHub publication, and self-contained archive without starting Phase 6.
 - [x] Remove the legacy in-process Celery Beat service so Phase 5 evaluation dispatch is exclusively externally triggered.
