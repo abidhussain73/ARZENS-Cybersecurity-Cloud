@@ -148,6 +148,7 @@ def _approved_scope(
     content_hash = ScopeApprovalService.content_hash(session, version)
     version.content_hash = content_hash
     if approved:
+        approval_time = datetime.now(UTC)
         session.add(
             ScopeApproval(
                 id=uuid.uuid4(),
@@ -156,8 +157,8 @@ def _approved_scope(
                 scope_version_id=version.id,
                 approved_by_user_id=user_id,
                 decision="APPROVED",
-                approved_at=datetime(2026, 8, 19, tzinfo=UTC),
-                expires_at=datetime(2026, 8, 20, tzinfo=UTC),
+                approved_at=approval_time - timedelta(minutes=1),
+                expires_at=approval_time + timedelta(days=1),
                 content_hash=content_hash,
             )
         )
