@@ -1407,6 +1407,57 @@ class AssetSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ChangeEvent(Base):
+    __tablename__ = "change_events"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "fingerprint", name="uq_change_event_org_fingerprint"),
+        ForeignKeyConstraint(
+            ["asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_change_event_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["from_snapshot_id", "organization_id"],
+            ["asset_snapshots.id", "asset_snapshots.organization_id"],
+            name="fk_change_event_from_snapshot_org",
+        ),
+        ForeignKeyConstraint(
+            ["to_snapshot_id", "organization_id"],
+            ["asset_snapshots.id", "asset_snapshots.organization_id"],
+            name="fk_change_event_to_snapshot_org",
+        ),
+        CheckConstraint(
+            "change_type IN ('NEW', 'REMOVED', 'SERVICE', 'CERTIFICATE', "
+            "'OWNERSHIP', 'FINGERPRINT')",
+            name="ck_change_event_type",
+        ),
+        CheckConstraint(
+            "state IN ('OBSERVED', 'EXPECTED', 'REVIEWED')", name="ck_change_event_state"
+        ),
+        Index("ix_change_events_org_state_seen", "organization_id", "state", "last_seen"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    change_type: Mapped[str] = mapped_column(String(16))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    from_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    to_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    summary: Mapped[str] = mapped_column(String(1024))
+    details_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    state: Mapped[str] = mapped_column(String(16), default="OBSERVED")
+    significance_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    significance_model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_change_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)
