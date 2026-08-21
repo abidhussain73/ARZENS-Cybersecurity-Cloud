@@ -8,4 +8,4 @@
 | EX360-T056 | Complete and locally validated with deterministic analysis tests |
 | EX360-T057 | Complete and locally validated with no-mutation simulation tests |
 
-Phase 6 is not yet published or accepted. AWS acceptance, protected review/merge, archive verification, and explicit coordinator approval remain required. Phase 7 has not started.
+Phase 6 is published after AWS acceptance, protected review/merge, and archive verification. **Phase 7 has not started and remains blocked until explicit coordinator approval.**
