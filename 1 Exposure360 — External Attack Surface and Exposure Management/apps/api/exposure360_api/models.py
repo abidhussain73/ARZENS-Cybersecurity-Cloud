@@ -1814,6 +1814,47 @@ class RiskFactorResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class VerifiedControlEvidence(Base):
+    __tablename__ = "verified_control_evidence"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_verified_control_evidence_id_org"),
+        CheckConstraint(
+            "verification_state IN ('VERIFIED', 'STALE', 'INVALID', 'REVOKED', 'UNKNOWN')",
+            name="ck_verified_control_state",
+        ),
+        CheckConstraint(
+            "effectiveness >= 0 AND effectiveness <= 1",
+            name="ck_verified_control_effectiveness",
+        ),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1", name="ck_verified_control_confidence"
+        ),
+        Index("ix_verified_controls_org_finding", "organization_id", "finding_id", "verified_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    service_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    finding_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    relationship_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    control_type: Mapped[str] = mapped_column(String(128))
+    control_key: Mapped[str] = mapped_column(String(255))
+    verification_state: Mapped[str] = mapped_column(String(16))
+    effectiveness: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    freshness_window_seconds: Mapped[int] = mapped_column(Integer)
+    source_type: Mapped[str] = mapped_column(String(64))
+    source_reference: Mapped[str] = mapped_column(String(512))
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)
