@@ -17,8 +17,10 @@ from .models import (
     RemediationTaskEvent,
     RiskAcceptanceException,
     RiskAssessment,
+    RiskFactorResult,
     SlaInstance,
     VerificationRun,
+    VerifiedControlEvidence,
 )
 from .security import OrganizationContext, Principal, organization_header, require_org_context
 
@@ -75,7 +77,7 @@ def get_risk(
     )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RISK_NOT_FOUND")
-    return _risk(item)
+    return _risk_detail(session, context, item)
 
 
 @router.get("/findings/{finding_id}/risk")
@@ -96,7 +98,7 @@ def latest_finding_risk(
     )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RISK_NOT_FOUND")
-    return _risk(item)
+    return _risk_detail(session, context, item)
 
 
 @router.get("/remediation/tasks")
@@ -214,6 +216,37 @@ def _risk(item: RiskAssessment) -> dict[str, object]:
     }
 
 
+def _risk_detail(
+    session: Session,
+    context: OrganizationContext,
+    item: RiskAssessment,
+) -> dict[str, object]:
+    factors = list(
+        session.scalars(
+            select(RiskFactorResult)
+            .where(
+                RiskFactorResult.organization_id == context.organization_id,
+                RiskFactorResult.risk_assessment_id == item.id,
+            )
+            .order_by(RiskFactorResult.factor_key.asc())
+        )
+    )
+    controls = list(
+        session.scalars(
+            select(VerifiedControlEvidence)
+            .where(
+                VerifiedControlEvidence.organization_id == context.organization_id,
+                VerifiedControlEvidence.finding_id == item.finding_id,
+            )
+            .order_by(VerifiedControlEvidence.verified_at.desc(), VerifiedControlEvidence.id.asc())
+        )
+    )
+    detail = _risk(item)
+    detail["factors"] = [_factor(factor) for factor in factors]
+    detail["verified_controls"] = [_control(control) for control in controls]
+    return detail
+
+
 def _task(item: RemediationTask) -> dict[str, object]:
     return {
         "id": str(item.id),
@@ -222,6 +255,38 @@ def _task(item: RemediationTask) -> dict[str, object]:
         "priority": item.priority,
         "due_at": item.due_at,
         "opened_at": item.opened_at,
+    }
+
+
+def _factor(item: RiskFactorResult) -> dict[str, object]:
+    return {
+        "key": item.factor_key,
+        "availability": item.availability,
+        "raw_value": item.raw_value_json,
+        "normalized_value": item.normalized_value,
+        "configured_weight": item.configured_weight,
+        "effective_weight": item.effective_weight,
+        "contribution": item.contribution,
+        "confidence": item.factor_confidence,
+        "evidence_reference": item.evidence_reference_json,
+        "reason_code": item.reason_code,
+    }
+
+
+def _control(item: VerifiedControlEvidence) -> dict[str, object]:
+    state = item.verification_state
+    return {
+        "id": str(item.id),
+        "control_type": item.control_type,
+        "control_key": item.control_key,
+        "state": state,
+        "freshness": "STALE" if state == "STALE" else state,
+        "verified_at": item.verified_at,
+        "expires_at": item.expires_at,
+        "effectiveness": item.effectiveness,
+        "confidence": item.confidence,
+        "reduction_applied": 0 if state in {"STALE", "INVALID", "REVOKED"} else None,
+        "source_reference": item.source_reference,
     }
 
 

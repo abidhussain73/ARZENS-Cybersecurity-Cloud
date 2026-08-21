@@ -18,7 +18,9 @@ from exposure360_api.models import (
     Organization,
     RemediationTask,
     RiskAssessment,
+    RiskFactorResult,
     User,
+    VerifiedControlEvidence,
 )
 from exposure360_api.security import Principal
 
@@ -161,6 +163,40 @@ def api_client(
         evaluated_at=NOW - timedelta(minutes=1),
         explanation_json={"fixture": "foreign"},
     )
+    factor = RiskFactorResult(
+        id=uuid.uuid4(),
+        organization_id=organization_a.id,
+        risk_assessment_id=risk.id,
+        factor_key="FINDING_SEVERITY",
+        availability="AVAILABLE",
+        raw_value_json={"severity": "HIGH"},
+        normalized_value=0.75,
+        configured_weight=0.3,
+        effective_weight=0.3,
+        contribution=22.5,
+        factor_confidence=1,
+        evidence_reference_json={"finding_id": str(primary_finding_id)},
+        reason_code=None,
+    )
+    stale_control = VerifiedControlEvidence(
+        id=uuid.uuid4(),
+        organization_id=organization_a.id,
+        asset_id=primary_asset.id,
+        service_asset_id=None,
+        finding_id=primary_finding_id,
+        relationship_id=None,
+        control_type="NETWORK_RESTRICTION",
+        control_key="fixture-stale-allowlist",
+        verification_state="STALE",
+        effectiveness=0.8,
+        confidence=0.9,
+        verified_at=NOW - timedelta(days=31),
+        expires_at=NOW - timedelta(days=1),
+        freshness_window_seconds=86_400,
+        source_type="fixture",
+        source_reference="fixture://stale-control",
+        metadata_json={"fixture": True},
+    )
     task = RemediationTask(
         id=uuid.uuid4(),
         organization_id=organization_a.id,
@@ -177,7 +213,17 @@ def api_client(
         due_at=NOW + timedelta(days=3),
     )
     database_session.add_all(
-        [primary_asset, foreign_asset, primary_finding, foreign_finding, risk, foreign_risk, task]
+        [
+            primary_asset,
+            foreign_asset,
+            primary_finding,
+            foreign_finding,
+            risk,
+            foreign_risk,
+            factor,
+            stale_control,
+            task,
+        ]
     )
     database_session.commit()
 
@@ -221,6 +267,9 @@ def test_phase7_risk_endpoints_are_bounded_and_labeled(
     detail = client.get(f"/api/v1/risks/{identifiers['risk']}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["risk_band"] == "HIGH"
+    assert detail.json()["factors"][0]["key"] == "FINDING_SEVERITY"
+    assert detail.json()["verified_controls"][0]["state"] == "STALE"
+    assert detail.json()["verified_controls"][0]["reduction_applied"] == 0
 
     latest = client.get(f"/api/v1/findings/{identifiers['finding']}/risk", headers=headers)
     assert latest.status_code == 200
