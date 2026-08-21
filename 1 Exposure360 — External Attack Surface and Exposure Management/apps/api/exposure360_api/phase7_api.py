@@ -714,6 +714,25 @@ def list_verification_runs(
     return {"items": [_verification(run) for run in runs]}
 
 
+@router.get("/verification-runs/{verification_run_id}")
+def get_verification_run(
+    verification_run_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    run = session.scalar(
+        select(VerificationRun).where(
+            VerificationRun.id == verification_run_id,
+            VerificationRun.organization_id == context.organization_id,
+        )
+    )
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VERIFICATION_NOT_FOUND")
+    return _verification(run)
+
+
 def _risk(item: RiskAssessment) -> dict[str, object]:
     return {
         "id": str(item.id),

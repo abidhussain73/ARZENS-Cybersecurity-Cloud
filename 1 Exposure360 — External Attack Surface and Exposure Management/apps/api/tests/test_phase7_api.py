@@ -508,3 +508,7 @@ def test_phase7_retest_requires_real_scope_guard_approval_and_keeps_runs_scoped(
     )
     assert foreign.status_code == 404
     assert foreign.json()["detail"] == "REMEDIATION_TASK_NOT_FOUND"
+
+    missing_run = client.get(f"/api/v1/verification-runs/{uuid.uuid4()}", headers=own_headers)
+    assert missing_run.status_code == 404
+    assert missing_run.json()["detail"] == "VERIFICATION_NOT_FOUND"
