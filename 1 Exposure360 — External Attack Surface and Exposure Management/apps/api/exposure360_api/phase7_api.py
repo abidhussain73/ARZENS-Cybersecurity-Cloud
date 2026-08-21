@@ -41,6 +41,13 @@ class RemediationTransitionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2048)
 
 
+class ExceptionRequest(BaseModel):
+    finding_id: uuid.UUID
+    remediation_task_id: uuid.UUID | None = None
+    rationale: str = Field(min_length=1, max_length=4096)
+    expires_at: datetime
+
+
 def _context(
     session: Session,
     principal: Principal,
@@ -256,6 +263,121 @@ def transition_remediation_task(
             detail={"code": "INVALID_REMEDIATION_TRANSITION", "message": str(exc)},
         ) from exc
     return _task(task)
+
+
+@router.get("/exceptions")
+def list_exceptions(
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+    state: str | None = Query(default=None, max_length=16),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    filters = [RiskAcceptanceException.organization_id == context.organization_id]
+    if state:
+        filters.append(RiskAcceptanceException.state == state)
+    rows = list(
+        session.scalars(
+            select(RiskAcceptanceException)
+            .where(*filters)
+            .order_by(RiskAcceptanceException.requested_at.desc(), RiskAcceptanceException.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+    )
+    total = session.scalar(select(func.count(RiskAcceptanceException.id)).where(*filters)) or 0
+    return {
+        "items": [_exception(item) for item in rows],
+        "page": {"offset": offset, "limit": limit, "total": total},
+    }
+
+
+@router.post("/exceptions")
+def request_exception(
+    payload: ExceptionRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "analyst", "admin", "owner")
+    now = datetime.now(UTC)
+    exception = RiskAcceptanceException(
+        id=uuid.uuid4(),
+        organization_id=context.organization_id,
+        finding_id=payload.finding_id,
+        remediation_task_id=payload.remediation_task_id,
+        state="REQUESTED",
+        requested_by_user_id=principal.user.id,
+        requested_at=now,
+        rationale=payload.rationale,
+        approved_by_user_id=None,
+        approved_at=None,
+        expires_at=payload.expires_at,
+        revoked_at=None,
+    )
+    try:
+        RemediationWorkflowService(session).request_exception(exception)
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "INVALID_EXCEPTION_TRANSITION", "message": str(exc)},
+        ) from exc
+    return _exception(exception)
+
+
+@router.post("/exceptions/{exception_id}/approve")
+def approve_exception(
+    exception_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "reviewer", "admin", "owner")
+    try:
+        exception = RemediationWorkflowService(session).approve_exception(
+            context.organization_id,
+            exception_id,
+            principal.user.id,
+            datetime.now(UTC),
+        )
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "INVALID_EXCEPTION_TRANSITION", "message": str(exc)},
+        ) from exc
+    return _exception(exception)
+
+
+@router.post("/exceptions/{exception_id}/reject")
+def reject_exception(
+    exception_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "reviewer", "admin", "owner")
+    try:
+        exception = RemediationWorkflowService(session).reject_exception(
+            context.organization_id,
+            exception_id,
+        )
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "INVALID_EXCEPTION_TRANSITION", "message": str(exc)},
+        ) from exc
+    return _exception(exception)
 
 
 def _risk(item: RiskAssessment) -> dict[str, object]:

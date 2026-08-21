@@ -359,3 +359,36 @@ def test_phase7_remediation_actions_use_named_state_machine_endpoints(
         headers=foreign_headers,
     )
     assert viewer.status_code == 403
+
+
+def test_phase7_exception_request_list_approval_and_rbac(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    own_headers = _headers(identifiers["org_a"])
+    foreign_headers = _headers(identifiers["org_b"])
+    request = client.post(
+        "/api/v1/exceptions",
+        json={
+            "finding_id": str(identifiers["finding"]),
+            "remediation_task_id": str(identifiers["task"]),
+            "rationale": "Documented maintenance window requires temporary governance review.",
+            "expires_at": "2026-09-01T12:00:00Z",
+        },
+        headers=own_headers,
+    )
+    assert request.status_code == 200
+    assert request.json()["state"] == "REQUESTED"
+    exception_id = request.json()["id"]
+
+    listing = client.get("/api/v1/exceptions?state=REQUESTED&limit=1", headers=own_headers)
+    assert listing.status_code == 200
+    assert listing.json()["page"]["total"] == 1
+    assert listing.json()["items"][0]["id"] == exception_id
+
+    approved = client.post(f"/api/v1/exceptions/{exception_id}/approve", headers=own_headers)
+    assert approved.status_code == 200
+    assert approved.json()["state"] == "APPROVED"
+
+    denied = client.post(f"/api/v1/exceptions/{exception_id}/reject", headers=foreign_headers)
+    assert denied.status_code == 403
