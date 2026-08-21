@@ -19,6 +19,7 @@ from exposure360_api.models import (
     RemediationTask,
     RiskAssessment,
     RiskFactorResult,
+    SlaPolicy,
     User,
     VerifiedControlEvidence,
 )
@@ -197,6 +198,18 @@ def api_client(
         source_reference="fixture://stale-control",
         metadata_json={"fixture": True},
     )
+    policy = SlaPolicy(
+        id=uuid.uuid4(),
+        organization_id=organization_a.id,
+        policy_key="fixture-high-risk",
+        version=1,
+        priority="P2",
+        acknowledge_within_seconds=None,
+        start_within_seconds=None,
+        resolve_within_seconds=259_200,
+        verify_within_seconds=86_400,
+        active=True,
+    )
     task = RemediationTask(
         id=uuid.uuid4(),
         organization_id=organization_a.id,
@@ -222,6 +235,7 @@ def api_client(
             foreign_risk,
             factor,
             stale_control,
+            policy,
             task,
         ]
     )
@@ -360,6 +374,26 @@ def test_phase7_remediation_actions_use_named_state_machine_endpoints(
         headers=foreign_headers,
     )
     assert viewer.status_code == 403
+
+
+def test_phase7_remediation_task_create_derives_priority_and_versioned_sla(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+    created = client.post(
+        "/api/v1/remediation/tasks",
+        json={
+            "finding_id": str(identifiers["finding"]),
+            "title": "Create task from HIGH contextual risk",
+            "description": "The deadline must come from the versioned P2 fixture policy.",
+        },
+        headers=headers,
+    )
+    assert created.status_code == 200
+    assert created.json()["state"] == "OPEN"
+    assert created.json()["priority"] == "P2"
+    assert created.json()["due_at"] is not None
 
 
 def test_phase7_exception_request_list_approval_and_rbac(

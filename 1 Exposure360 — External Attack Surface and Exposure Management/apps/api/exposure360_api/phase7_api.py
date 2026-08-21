@@ -31,13 +31,18 @@ from .models import (
     RiskAssessment,
     RiskFactorResult,
     SlaInstance,
+    SlaPolicy,
     VerificationRun,
     VerifiedControlEvidence,
 )
 from .path_breaking import PathBreakingSimulator
 from .relationships import ASSET, GraphNodeReference, RelationshipError
 from .remediation import RemediationState
-from .remediation_workflow import RemediationWorkflowError, RemediationWorkflowService
+from .remediation_workflow import (
+    RemediationWorkflowError,
+    RemediationWorkflowService,
+    priority_for_risk_band,
+)
 from .scope_guard import OperationContext, ScopeAuthorizationRequest, ScopeGuard
 from .security import (
     OrganizationContext,
@@ -53,6 +58,12 @@ router = APIRouter(prefix="/api/v1", tags=["phase-7"])
 
 class RemediationTransitionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2048)
+
+
+class RemediationTaskCreateRequest(BaseModel):
+    finding_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=1024)
+    description: str | None = Field(default=None, max_length=8192)
 
 
 class ExceptionRequest(BaseModel):
@@ -181,6 +192,57 @@ def list_remediation_tasks(
         "items": [_task(item) for item in rows],
         "page": {"offset": offset, "limit": limit, "total": total},
     }
+
+
+@router.post("/remediation/tasks")
+def create_remediation_task(
+    payload: RemediationTaskCreateRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "analyst", "admin", "owner")
+    risk = session.scalar(
+        select(RiskAssessment)
+        .where(
+            RiskAssessment.organization_id == context.organization_id,
+            RiskAssessment.finding_id == payload.finding_id,
+        )
+        .order_by(RiskAssessment.evaluated_at.desc(), RiskAssessment.id.asc())
+    )
+    if risk is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RISK_NOT_FOUND")
+    policy = session.scalar(
+        select(SlaPolicy)
+        .where(
+            SlaPolicy.active.is_(True),
+            SlaPolicy.organization_id.in_((None, context.organization_id)),
+            SlaPolicy.priority == priority_for_risk_band(risk.risk_band),
+        )
+        .order_by(SlaPolicy.organization_id.desc(), SlaPolicy.version.desc(), SlaPolicy.id.asc())
+    )
+    if policy is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="SLA_POLICY_NOT_FOUND")
+    try:
+        task = RemediationWorkflowService(session).create_task(
+            context.organization_id,
+            payload.finding_id,
+            policy,
+            datetime.now(UTC),
+            title=payload.title,
+            description=payload.description,
+            risk_band=risk.risk_band,
+            actor_user_id=principal.user.id,
+        )
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "REMEDIATION_TASK_CREATE_DENIED", "message": str(exc)},
+        ) from exc
+    return _task(task)
 
 
 @router.get("/remediation/tasks/{task_id}")
