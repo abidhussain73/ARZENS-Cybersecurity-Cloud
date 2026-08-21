@@ -92,6 +92,12 @@ def _cleanup(organization_id: uuid.UUID) -> None:
 
 
 def main() -> int:
+    cleanup_organization_id = os.environ.get("PHASE7_CLEANUP_ORGANIZATION_ID")
+    if cleanup_organization_id:
+        _cleanup(uuid.UUID(cleanup_organization_id))
+        print("phase7_aws_acceptance_cleanup=passed")
+        return 0
+
     username = os.environ.get("PHASE7_ACCEPTANCE_USERNAME")
     password = os.environ.get("PHASE7_ACCEPTANCE_PASSWORD")
     if not username or not password:
@@ -102,6 +108,8 @@ def main() -> int:
     organization_id = uuid.uuid4()
     now = datetime.now(UTC)
     fixture_key = f"phase7-acceptance-{organization_id.hex}"
+    retain_for_gateway_probe = os.environ.get("PHASE7_RETAIN_FIXTURE_FOR_GATEWAY_PROBE") == "true"
+    completed = False
     try:
         with httpx.Client(base_url="http://api:8000", timeout=20) as client:
             me = _status(client.get("/api/v1/me", headers=headers), 200)
@@ -332,10 +340,14 @@ def main() -> int:
                 or paths["exploitability_verified"] is not False
             ):
                 raise RuntimeError("attack-path safety flags were not preserved")
+        completed = True
+        if retain_for_gateway_probe:
+            print(f"phase7_gateway_probe_organization_id={organization_id}")
         print("phase7_aws_acceptance=passed fixture_only=true source_system_mutation=false")
         return 0
     finally:
-        _cleanup(organization_id)
+        if not retain_for_gateway_probe or not completed:
+            _cleanup(organization_id)
 
 
 if __name__ == "__main__":

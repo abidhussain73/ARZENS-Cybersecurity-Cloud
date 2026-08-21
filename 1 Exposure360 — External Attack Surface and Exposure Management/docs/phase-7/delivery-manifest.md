@@ -11,7 +11,7 @@ The `phase7-development` branch contains contextual risk, verified controls, rem
 | Backend local quality gate | Ruff clean, strict mypy clean, 298 tests passed |
 | Managed dashboard quality gate | TypeScript clean, 13 unit tests passed, production build passed |
 | AWS migration | `0021_verification_runs (head)` |
-| Persistent private gateway | Loopback HTTPS health 200, protected risk API 401 without token, restricted preflight 204 |
+| Persistent private gateway | Loopback HTTPS health 200, protected risk API 401 without token, restricted preflight 204, real-token organization-scoped risk API 200 |
 | AWS fixture-only acceptance | Passed; no active scanning and no source-system mutation |
 
 ## Explicitly deferred public activation

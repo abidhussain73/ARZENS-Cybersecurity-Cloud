@@ -13,7 +13,7 @@ Result: **298 passed**, Ruff clean, 120 files formatted, and strict mypy reporte
 
 ## AWS private deployment and gateway validation
 
-The AWS Compose stack was rebuilt from the isolated Phase 7 branch and Alembic advanced from `0018_relationship_graph` to `0021_verification_runs (head)`. The persistent Caddy gateway is bound to `127.0.0.1:8443`, uses private internal TLS, and leaves the API and Keycloak upstream bindings private. Deployed validation confirmed `GET /gateway/health = 200`, unauthenticated `GET /api/v1/risks = 401`, and the restricted API preflight response = `204` for the configured origin.
+The AWS Compose stack was rebuilt from the isolated Phase 7 branch and Alembic advanced from `0018_relationship_graph` to `0021_verification_runs (head)`. The persistent Caddy gateway is bound to `127.0.0.1:8443`, uses private internal TLS, and leaves the API and Keycloak upstream bindings private. Deployed validation confirmed `GET /gateway/health = 200`, unauthenticated `GET /api/v1/risks = 401`, and the restricted API preflight response = `204` for the configured origin. A real local Keycloak token then accessed the organization-scoped protected risk endpoint through the loopback HTTPS gateway with `200`; the self-cleaning fixture data was removed afterward.
 
 The self-cleaning fixture-only acceptance harness obtained a real local Keycloak token and exercised deployed contextual risk, a stale verified control with zero reduction, policy-backed remediation/SLA, exception approval, ScopeGuard retest denial, verification listing, and analytical attack-path safety flags. It completed with `phase7_aws_acceptance=passed fixture_only=true source_system_mutation=false` and deleted its synthetic organization records.
 
