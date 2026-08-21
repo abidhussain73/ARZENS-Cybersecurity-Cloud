@@ -8,11 +8,11 @@ All Phase 6 implementation tasks have local static and automated evidence. The f
 
 | Gate | Status |
 |---|---|
-| Apply Alembic `0018_relationship_graph` on AWS | Pending |
-| AWS self-cleaning synthetic fixture acceptance | Pending |
-| Isolated branch commit and push | Pending |
-| Protected pull-request review and merge | Pending |
-| Self-contained archive with SHA-256 | Pending |
+| Apply Alembic `0018_relationship_graph` on AWS | Completed; head verified |
+| AWS self-cleaning synthetic fixture acceptance | Completed; no source mutation |
+| Isolated branch commit and push | Completed; `a2a6042970fae93538636e5f21af6175397bdbb2` |
+| Protected pull-request review and merge | Completed; `e3c3913120fefaf059e997cea630a0dde592ac0e` |
+| Self-contained archive with SHA-256 | Completed; see `delivery-manifest.md` |
 | Explicit coordinator approval for Phase 7 | Pending |
 
-This report records local completion only and does not authorize Phase 7 work.
+This report records published Phase 6 completion and does not authorize Phase 7 work without explicit coordinator approval.
