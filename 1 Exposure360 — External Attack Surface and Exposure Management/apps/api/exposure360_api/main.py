@@ -26,6 +26,7 @@ from .jobs import get_celery_client
 from .logging import configure_logging
 from .models import Membership, Organization
 from .observability import configure_tracing, trace_identifiers
+from .phase7_api import router as phase7_router
 from .security import (
     OrganizationContext,
     Principal,
@@ -46,6 +47,7 @@ app.include_router(evidence_router)
 app.include_router(canonical_asset_router)
 app.include_router(findings_router)
 app.include_router(changes_router)
+app.include_router(phase7_router)
 FastAPIInstrumentor.instrument_app(app)
 HTTP_REQUESTS = Counter(
     "exposure360_http_requests_total", "HTTP requests", ["method", "route", "status"]

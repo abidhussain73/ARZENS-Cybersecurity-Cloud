@@ -249,4 +249,4 @@ def test_findings_cross_organization_denial_and_openapi(
     assert openapi.status_code == 200
     paths = openapi.json()["paths"]
     assert "/api/v1/findings/{finding_id}/evidence" in paths
-    assert not any("risk" in path for path in paths)
+    assert "/api/v1/risks" in paths

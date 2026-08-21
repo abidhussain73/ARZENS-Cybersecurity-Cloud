@@ -1,0 +1,146 @@
+"""Organization-scoped Phase 7 contextual-risk and remediation read APIs."""
+
+from __future__ import annotations
+
+import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from .auth import current_principal
+from .db import get_session
+from .models import RemediationTask, RiskAssessment
+from .security import OrganizationContext, Principal, organization_header, require_org_context
+
+router = APIRouter(prefix="/api/v1", tags=["phase-7"])
+
+
+def _context(
+    session: Session,
+    principal: Principal,
+    organization_id: str | None,
+) -> OrganizationContext:
+    return require_org_context(session, principal, organization_id)
+
+
+@router.get("/risks")
+def list_risks(
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    filters = [RiskAssessment.organization_id == context.organization_id]
+    rows = list(
+        session.scalars(
+            select(RiskAssessment)
+            .where(*filters)
+            .order_by(RiskAssessment.evaluated_at.desc(), RiskAssessment.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+    )
+    total = session.scalar(select(func.count(RiskAssessment.id)).where(*filters)) or 0
+    return {
+        "items": [_risk(item) for item in rows],
+        "page": {"offset": offset, "limit": limit, "total": total},
+    }
+
+
+@router.get("/risks/{risk_assessment_id}")
+def get_risk(
+    risk_assessment_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    item = session.scalar(
+        select(RiskAssessment).where(
+            RiskAssessment.id == risk_assessment_id,
+            RiskAssessment.organization_id == context.organization_id,
+        )
+    )
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RISK_NOT_FOUND")
+    return _risk(item)
+
+
+@router.get("/findings/{finding_id}/risk")
+def latest_finding_risk(
+    finding_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    item = session.scalar(
+        select(RiskAssessment)
+        .where(
+            RiskAssessment.finding_id == finding_id,
+            RiskAssessment.organization_id == context.organization_id,
+        )
+        .order_by(RiskAssessment.evaluated_at.desc())
+    )
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RISK_NOT_FOUND")
+    return _risk(item)
+
+
+@router.get("/remediation/tasks")
+def list_remediation_tasks(
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+    state: str | None = Query(default=None, max_length=40),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    filters = [RemediationTask.organization_id == context.organization_id]
+    if state:
+        filters.append(RemediationTask.state == state)
+    rows = list(
+        session.scalars(
+            select(RemediationTask)
+            .where(*filters)
+            .order_by(RemediationTask.due_at.asc(), RemediationTask.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+    )
+    total = session.scalar(select(func.count(RemediationTask.id)).where(*filters)) or 0
+    return {
+        "items": [_task(item) for item in rows],
+        "page": {"offset": offset, "limit": limit, "total": total},
+    }
+
+
+def _risk(item: RiskAssessment) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "finding_id": str(item.finding_id),
+        "raw_contextual_risk_score": item.raw_score,
+        "adjusted_contextual_risk_score": item.adjusted_score,
+        "risk_band": item.risk_band,
+        "risk_confidence": item.confidence,
+        "factor_coverage": item.factor_coverage,
+        "model_version": item.model_version,
+        "registry_hash": item.registry_hash,
+        "evaluated_at": item.evaluated_at,
+    }
+
+
+def _task(item: RemediationTask) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "finding_id": str(item.finding_id),
+        "state": item.state,
+        "priority": item.priority,
+        "due_at": item.due_at,
+        "opened_at": item.opened_at,
+    }
