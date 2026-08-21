@@ -1547,6 +1547,191 @@ class EvaluationRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ExternalContextEntity(Base):
+    """A bounded non-asset graph node imported from trusted structural metadata."""
+
+    __tablename__ = "external_context_entities"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_external_context_entity_id_org"),
+        UniqueConstraint(
+            "organization_id",
+            "context_type",
+            "canonical_key",
+            name="uq_external_context_entity_org_type_key",
+        ),
+        CheckConstraint(
+            "context_type IN ('IDENTITY', 'CLOUD_RESOURCE', 'APPLICATION', 'DATA', "
+            "'VULNERABILITY')",
+            name="ck_external_context_entity_type",
+        ),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1", name="ck_external_context_entity_confidence"
+        ),
+        CheckConstraint(
+            "state IN ('ACTIVE', 'STALE', 'ENDED', 'INVALID')",
+            name="ck_external_context_entity_state",
+        ),
+        Index(
+            "ix_external_context_entities_org_type_seen",
+            "organization_id",
+            "context_type",
+            "last_seen",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    context_type: Mapped[str] = mapped_column(String(32))
+    canonical_key: Mapped[str] = mapped_column(String(2048))
+    display_name: Mapped[str] = mapped_column(String(2048))
+    source_namespace: Mapped[str] = mapped_column(String(128))
+    source_native_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float)
+    state: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Relationship(Base):
+    """Evidence-backed directional graph edge; never an assertion of exploitability."""
+
+    __tablename__ = "relationships"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_relationship_id_org"),
+        UniqueConstraint(
+            "organization_id", "canonical_key", name="uq_relationship_org_canonical_key"
+        ),
+        ForeignKeyConstraint(
+            ["source_asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_relationship_source_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["target_asset_id", "organization_id"],
+            ["assets.id", "assets.organization_id"],
+            name="fk_relationship_target_asset_org",
+        ),
+        ForeignKeyConstraint(
+            ["source_context_entity_id", "organization_id"],
+            ["external_context_entities.id", "external_context_entities.organization_id"],
+            name="fk_relationship_source_context_org",
+        ),
+        ForeignKeyConstraint(
+            ["target_context_entity_id", "organization_id"],
+            ["external_context_entities.id", "external_context_entities.organization_id"],
+            name="fk_relationship_target_context_org",
+        ),
+        CheckConstraint(
+            "(source_asset_id IS NOT NULL AND source_context_entity_id IS NULL) OR "
+            "(source_asset_id IS NULL AND source_context_entity_id IS NOT NULL)",
+            name="ck_relationship_one_source_endpoint",
+        ),
+        CheckConstraint(
+            "(target_asset_id IS NOT NULL AND target_context_entity_id IS NULL) OR "
+            "(target_asset_id IS NULL AND target_context_entity_id IS NOT NULL)",
+            name="ck_relationship_one_target_endpoint",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_relationship_confidence"),
+        CheckConstraint(
+            "valid_to IS NULL OR valid_from < valid_to", name="ck_relationship_valid_window"
+        ),
+        CheckConstraint(
+            "state IN ('ACTIVE', 'STALE', 'ENDED', 'INVALID')", name="ck_relationship_state"
+        ),
+        Index(
+            "ix_relationships_org_source_asset_state", "organization_id", "source_asset_id", "state"
+        ),
+        Index(
+            "ix_relationships_org_target_asset_state", "organization_id", "target_asset_id", "state"
+        ),
+        Index(
+            "ix_relationships_org_source_context_state",
+            "organization_id",
+            "source_context_entity_id",
+            "state",
+        ),
+        Index(
+            "ix_relationships_org_target_context_state",
+            "organization_id",
+            "target_context_entity_id",
+            "state",
+        ),
+        Index("ix_relationships_org_type_state", "organization_id", "relationship_type", "state"),
+        Index("ix_relationships_org_valid_window", "organization_id", "valid_from", "valid_to"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    relationship_type: Mapped[str] = mapped_column(String(128))
+    source_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_context_entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    target_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    target_context_entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    canonical_key: Mapped[str] = mapped_column(String(64))
+    confidence: Mapped[float] = mapped_column(Float)
+    confidence_model_version: Mapped[str] = mapped_column(String(64))
+    registry_version: Mapped[str] = mapped_column(String(64))
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    state: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    source_system: Mapped[str] = mapped_column(String(128))
+    source_record_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RelationshipEvidenceLink(Base):
+    __tablename__ = "relationship_evidence_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "link_key", name="uq_relationship_evidence_link_org_key"
+        ),
+        ForeignKeyConstraint(
+            ["relationship_id", "organization_id"],
+            ["relationships.id", "relationships.organization_id"],
+            name="fk_relationship_evidence_link_relationship_org",
+        ),
+        ForeignKeyConstraint(
+            ["observation_id", "organization_id"],
+            ["canonical_observations.id", "canonical_observations.organization_id"],
+            name="fk_relationship_evidence_link_observation_org",
+        ),
+        ForeignKeyConstraint(
+            ["evidence_id", "organization_id"],
+            ["evidence.id", "evidence.organization_id"],
+            name="fk_relationship_evidence_link_evidence_org",
+        ),
+        CheckConstraint(
+            "observation_id IS NOT NULL OR evidence_id IS NOT NULL OR "
+            "source_context_record_hash IS NOT NULL",
+            name="ck_relationship_evidence_link_provenance",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    relationship_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    observation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_context_record_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    link_key: Mapped[str] = mapped_column(String(64))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)

@@ -84,3 +84,27 @@
 - [x] EX360-T052: Add rule/change metrics and durable scheduled evaluation with idempotent run evidence.
 - [x] Produce the required Phase 5 documentation, full regression evidence, AWS fixture acceptance, protected GitHub publication, and self-contained archive without starting Phase 6.
 - [x] Remove the legacy in-process Celery Beat service so Phase 5 evaluation dispatch is exclusively externally triggered.
+- [x] EX360-T053: Create time-aware relationship persistence and an allowed relationship-type registry.
+- [x] EX360-T054: Implement canonical synthetic external-context imports for identity, cloud, application, data, and vulnerability relationships.
+- [x] EX360-T055: Implement bounded graph traversal with max hops, allowed edges, organization isolation, and cycle protection.
+- [x] EX360-T056: Implement deterministic attack-path score, confidence, and blast-radius summary.
+- [x] EX360-T057: Implement analytical path-breaking candidate simulation without source-system mutation.
+- [ ] Produce Phase 6 documentation, regression, AWS synthetic acceptance, protected GitHub publication, and self-contained archive without starting Phase 7.
+- [ ] EX360-T058: Implement factor-availability-aware contextual risk scoring.
+- [ ] EX360-T059: Implement verified-control reduction with freshness and confidence handling.
+- [ ] EX360-T060: Create remediation task, exception, and SLA models with state enforcement.
+- [ ] EX360-T061: Implement safe retest workflow and current-evidence closure gate.
+- [ ] EX360-T062: Create organization-safe attack-path, risk, and remediation APIs.
+- [ ] EX360-T063: Create Attack Paths and Remediation UI with accessible browser workflow evidence.
+- [ ] Produce Phase 7 documentation, regression, AWS synthetic acceptance, protected GitHub publication, and self-contained archive without starting Phase 8.
+- [ ] EX360-T064: Build operational dashboard aggregate endpoints from authoritative state.
+- [ ] EX360-T065: Build allowlisted organization-scoped global search.
+- [ ] EX360-T066: Implement deterministic executive, inventory, finding, change, and remediation report templates.
+- [ ] EX360-T067: Implement asynchronous CSV and JSON export jobs with integrity manifests and private authorization.
+- [ ] EX360-T068: Implement safe webhook registrations and signed event-summary delivery.
+- [ ] EX360-T069: Implement connector-management and non-secret health UI.
+- [ ] EX360-T070: Implement report and export UI with browser evidence.
+- [ ] EX360-T071: Implement notification center and partial/degraded job-status center.
+- [ ] EX360-T072: Complete Phase 8 keyboard, focus, label, contrast, and non-color accessibility evidence.
+- [ ] EX360-T073: Generate a typed OpenAPI client and remove undocumented frontend URL construction.
+- [ ] Produce Phase 8 documentation, regression, AWS synthetic acceptance, protected GitHub publication, and self-contained archive without starting Phase 9.
