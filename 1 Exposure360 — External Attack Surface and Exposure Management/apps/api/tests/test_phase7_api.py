@@ -425,6 +425,11 @@ def test_phase7_exception_request_list_approval_and_rbac(
     assert approved.status_code == 200
     assert approved.json()["state"] == "APPROVED"
 
+    revoked = client.post(f"/api/v1/exceptions/{exception_id}/revoke", headers=own_headers)
+    assert revoked.status_code == 200
+    assert revoked.json()["state"] == "REVOKED"
+    assert revoked.json()["revoked_at"] is not None
+
     denied = client.post(f"/api/v1/exceptions/{exception_id}/reject", headers=foreign_headers)
     assert denied.status_code == 403
 

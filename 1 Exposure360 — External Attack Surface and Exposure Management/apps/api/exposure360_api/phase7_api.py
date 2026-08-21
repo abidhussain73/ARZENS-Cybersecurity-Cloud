@@ -485,6 +485,31 @@ def reject_exception(
     return _exception(exception)
 
 
+@router.post("/exceptions/{exception_id}/revoke")
+def revoke_exception(
+    exception_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "admin", "owner")
+    try:
+        exception = RemediationWorkflowService(session).revoke_exception(
+            context.organization_id,
+            exception_id,
+            datetime.now(UTC),
+        )
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "INVALID_EXCEPTION_TRANSITION", "message": str(exc)},
+        ) from exc
+    return _exception(exception)
+
+
 @router.get("/attack-paths")
 def list_attack_paths(
     start_asset_id: uuid.UUID,

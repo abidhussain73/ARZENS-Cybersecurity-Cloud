@@ -178,6 +178,19 @@ class RemediationWorkflowService:
         exception.state = "REJECTED"
         return exception
 
+    def revoke_exception(
+        self,
+        organization_id: uuid.UUID,
+        exception_id: uuid.UUID,
+        revoked_at: datetime,
+    ) -> RiskAcceptanceException:
+        exception = self._exception(organization_id, exception_id)
+        if exception.state != "APPROVED":
+            raise RemediationWorkflowError("only approved exceptions may be revoked")
+        exception.state = "REVOKED"
+        exception.revoked_at = _utc(revoked_at)
+        return exception
+
     def expire_exceptions(
         self, organization_id: uuid.UUID, now: datetime
     ) -> list[RiskAcceptanceException]:
