@@ -2006,6 +2006,121 @@ class SlaInstance(Base):
     )
 
 
+class VerificationRun(Base):
+    __tablename__ = "verification_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "idempotency_key",
+            name="uq_verification_run_org_idempotency",
+        ),
+        UniqueConstraint("id", "organization_id", name="uq_verification_run_id_org"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_verification_run_finding_org",
+        ),
+        ForeignKeyConstraint(
+            ["remediation_task_id", "organization_id"],
+            ["remediation_tasks.id", "remediation_tasks.organization_id"],
+            name="fk_verification_run_task_org",
+        ),
+        CheckConstraint(
+            "state IN ('QUEUED', 'RUNNING', 'PARTIAL', 'COMPLETED', 'FAILED', 'CANCELLED')",
+            name="ck_verification_run_state",
+        ),
+        CheckConstraint(
+            "result IS NULL OR result IN ('CONDITION_PRESENT', 'CONDITION_ABSENT', 'INCONCLUSIVE')",
+            name="ck_verification_run_result",
+        ),
+        Index(
+            "ix_verification_run_one_active_task",
+            "organization_id",
+            "remediation_task_id",
+            unique=True,
+            postgresql_where=text("state IN ('QUEUED', 'RUNNING')"),
+            sqlite_where=text("state IN ('QUEUED', 'RUNNING')"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    remediation_task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    state: Mapped[str] = mapped_column(String(16), default="QUEUED")
+    requested_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    result: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence_collected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    evidence_integrity_valid: Mapped[bool] = mapped_column(Boolean, default=False)
+    collection_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    scope_approval_valid: Mapped[bool] = mapped_column(Boolean, default=False)
+    correct_target: Mapped[bool] = mapped_column(Boolean, default=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    correlation_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ClosureDecisionRecord(Base):
+    __tablename__ = "closure_decisions"
+    __table_args__ = (
+        UniqueConstraint("verification_run_id", name="uq_closure_decision_verification_run"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_closure_decision_finding_org",
+        ),
+        ForeignKeyConstraint(
+            ["remediation_task_id", "organization_id"],
+            ["remediation_tasks.id", "remediation_tasks.organization_id"],
+            name="fk_closure_decision_task_org",
+        ),
+        ForeignKeyConstraint(
+            ["verification_run_id", "organization_id"],
+            ["verification_runs.id", "verification_runs.organization_id"],
+            name="fk_closure_decision_run_org",
+        ),
+        CheckConstraint(
+            "decision IN ('ALLOW_CLOSE', 'DENY_CLOSE', 'INCONCLUSIVE')",
+            name="ck_closure_decision_decision",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    remediation_task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    verification_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    decision: Mapped[str] = mapped_column(String(32))
+    reason_codes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    evidence_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    observation_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    rule_id: Mapped[str] = mapped_column(String(255))
+    rule_version: Mapped[int] = mapped_column(Integer)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actor_or_system: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+@event.listens_for(ClosureDecisionRecord, "before_update")
+def _prevent_closure_decision_update(_: object, __: object, ___: object) -> None:
+    raise ValueError("closure decisions are immutable")
+
+
+@event.listens_for(ClosureDecisionRecord, "before_delete")
+def _prevent_closure_decision_delete(_: object, __: object, ___: object) -> None:
+    raise ValueError("closure decisions are immutable")
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)
