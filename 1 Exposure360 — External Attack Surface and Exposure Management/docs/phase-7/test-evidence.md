@@ -11,9 +11,11 @@ OTEL_SDK_DISABLED=true uv run pytest -q
 
 Result: **298 passed**, Ruff clean, 120 files formatted, and strict mypy reported no issues.
 
-## Gateway configuration validation
+## AWS private deployment and gateway validation
 
-The Caddy 2.8 configuration validated in an isolated AWS container. The parameterized compose configuration also validated on the AWS Docker host without altering the running deployment. A private temporary gateway used loopback HTTPS, internal TLS, narrow CORS preflight, and private upstreams. At that point AWS still ran the Phase 6 baseline, so `/api/v1/risks` correctly returned 404 through the proxy; Phase 7 deployment evidence remains pending.
+The AWS Compose stack was rebuilt from the isolated Phase 7 branch and Alembic advanced from `0018_relationship_graph` to `0021_verification_runs (head)`. The persistent Caddy gateway is bound to `127.0.0.1:8443`, uses private internal TLS, and leaves the API and Keycloak upstream bindings private. Deployed validation confirmed `GET /gateway/health = 200`, unauthenticated `GET /api/v1/risks = 401`, and the restricted API preflight response = `204` for the configured origin.
+
+The self-cleaning fixture-only acceptance harness obtained a real local Keycloak token and exercised deployed contextual risk, a stale verified control with zero reduction, policy-backed remediation/SLA, exception approval, ScopeGuard retest denial, verification listing, and analytical attack-path safety flags. It completed with `phase7_aws_acceptance=passed fixture_only=true source_system_mutation=false` and deleted its synthetic organization records.
 
 ## Managed dashboard quality gate
 
