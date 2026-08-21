@@ -11,7 +11,15 @@ from sqlalchemy.orm import Session
 
 from .auth import current_principal
 from .db import get_session
-from .models import RemediationTask, RiskAssessment
+from .models import (
+    ClosureDecisionRecord,
+    RemediationTask,
+    RemediationTaskEvent,
+    RiskAcceptanceException,
+    RiskAssessment,
+    SlaInstance,
+    VerificationRun,
+)
 from .security import OrganizationContext, Principal, organization_header, require_org_context
 
 router = APIRouter(prefix="/api/v1", tags=["phase-7"])
@@ -120,6 +128,77 @@ def list_remediation_tasks(
     }
 
 
+@router.get("/remediation/tasks/{task_id}")
+def get_remediation_task(
+    task_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    task = session.scalar(
+        select(RemediationTask).where(
+            RemediationTask.id == task_id,
+            RemediationTask.organization_id == context.organization_id,
+        )
+    )
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="REMEDIATION_TASK_NOT_FOUND",
+        )
+    events = list(
+        session.scalars(
+            select(RemediationTaskEvent)
+            .where(
+                RemediationTaskEvent.organization_id == context.organization_id,
+                RemediationTaskEvent.remediation_task_id == task.id,
+            )
+            .order_by(RemediationTaskEvent.occurred_at.asc(), RemediationTaskEvent.id.asc())
+        )
+    )
+    exceptions = list(
+        session.scalars(
+            select(RiskAcceptanceException).where(
+                RiskAcceptanceException.organization_id == context.organization_id,
+                RiskAcceptanceException.remediation_task_id == task.id,
+            )
+        )
+    )
+    sla = session.scalar(
+        select(SlaInstance).where(
+            SlaInstance.organization_id == context.organization_id,
+            SlaInstance.remediation_task_id == task.id,
+        )
+    )
+    verification_runs = list(
+        session.scalars(
+            select(VerificationRun)
+            .where(
+                VerificationRun.organization_id == context.organization_id,
+                VerificationRun.remediation_task_id == task.id,
+            )
+            .order_by(VerificationRun.requested_at.desc(), VerificationRun.id.asc())
+        )
+    )
+    decisions = list(
+        session.scalars(
+            select(ClosureDecisionRecord).where(
+                ClosureDecisionRecord.organization_id == context.organization_id,
+                ClosureDecisionRecord.remediation_task_id == task.id,
+            )
+        )
+    )
+    return {
+        "task": _task(task),
+        "sla": _sla(sla),
+        "exceptions": [_exception(item) for item in exceptions],
+        "verification_runs": [_verification(item) for item in verification_runs],
+        "closure_decisions": [_closure(item) for item in decisions],
+        "history": [_event(item) for item in events],
+    }
+
+
 def _risk(item: RiskAssessment) -> dict[str, object]:
     return {
         "id": str(item.id),
@@ -143,4 +222,68 @@ def _task(item: RemediationTask) -> dict[str, object]:
         "priority": item.priority,
         "due_at": item.due_at,
         "opened_at": item.opened_at,
+    }
+
+
+def _event(item: RemediationTaskEvent) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "event_type": item.event_type,
+        "from_state": item.from_state,
+        "to_state": item.to_state,
+        "reason": item.reason,
+        "metadata": item.metadata_json,
+        "occurred_at": item.occurred_at,
+    }
+
+
+def _exception(item: RiskAcceptanceException) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "state": item.state,
+        "rationale": item.rationale,
+        "requested_at": item.requested_at,
+        "approved_at": item.approved_at,
+        "expires_at": item.expires_at,
+        "revoked_at": item.revoked_at,
+    }
+
+
+def _sla(item: SlaInstance | None) -> dict[str, object] | None:
+    if item is None:
+        return None
+    return {
+        "policy_version": item.policy_version,
+        "state": item.state,
+        "started_at": item.started_at,
+        "resolve_due_at": item.resolve_due_at,
+        "verify_due_at": item.verify_due_at,
+        "final_due_at": item.final_due_at,
+        "paused_at": item.paused_at,
+        "paused_duration_seconds": item.paused_duration_seconds,
+    }
+
+
+def _verification(item: VerificationRun) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "state": item.state,
+        "result": item.result,
+        "requested_at": item.requested_at,
+        "started_at": item.started_at,
+        "finished_at": item.finished_at,
+        "evidence_integrity_valid": item.evidence_integrity_valid,
+        "collection_complete": item.collection_complete,
+        "correct_target": item.correct_target,
+    }
+
+
+def _closure(item: ClosureDecisionRecord) -> dict[str, object]:
+    return {
+        "id": str(item.id),
+        "decision": item.decision,
+        "reason_codes": item.reason_codes,
+        "decided_at": item.decided_at,
+        "rule_id": item.rule_id,
+        "rule_version": item.rule_version,
     }

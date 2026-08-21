@@ -250,3 +250,23 @@ def test_phase7_risk_and_task_endpoints_are_organization_scoped_and_in_openapi(
     paths = openapi.json()["paths"]
     assert "/api/v1/risks" in paths
     assert "/api/v1/remediation/tasks" in paths
+
+
+def test_phase7_remediation_task_detail_is_organization_scoped(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    own_headers = _headers(identifiers["org_a"])
+    foreign_headers = _headers(identifiers["org_b"])
+
+    detail = client.get(f"/api/v1/remediation/tasks/{identifiers['task']}", headers=own_headers)
+    assert detail.status_code == 200
+    assert detail.json()["task"]["state"] == "IN_PROGRESS"
+    assert detail.json()["sla"] is None
+    assert detail.json()["history"] == []
+    assert detail.json()["verification_runs"] == []
+    assert detail.json()["closure_decisions"] == []
+
+    denied = client.get(f"/api/v1/remediation/tasks/{identifiers['task']}", headers=foreign_headers)
+    assert denied.status_code == 404
+    assert denied.json()["detail"] == "REMEDIATION_TASK_NOT_FOUND"
