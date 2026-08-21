@@ -38,6 +38,7 @@ from .path_breaking import PathBreakingSimulator
 from .relationships import ASSET, GraphNodeReference, RelationshipError
 from .remediation import RemediationState
 from .remediation_workflow import RemediationWorkflowError, RemediationWorkflowService
+from .scope_guard import OperationContext, ScopeAuthorizationRequest, ScopeGuard
 from .security import (
     OrganizationContext,
     Principal,
@@ -45,6 +46,7 @@ from .security import (
     require_org_context,
     require_role,
 )
+from .verification_run import VerificationRunError, VerificationRunService
 
 router = APIRouter(prefix="/api/v1", tags=["phase-7"])
 
@@ -67,6 +69,15 @@ class AttackPathAnalysisRequest(BaseModel):
     max_paths: int = Field(default=100, ge=1, le=GRAPH_MAX_PATHS)
     min_edge_confidence: float = Field(default=0, ge=0, le=1)
     effective_at: datetime | None = None
+
+
+class RetestRequest(BaseModel):
+    scope_id: uuid.UUID
+    scope_version_id: uuid.UUID
+    approval_id: uuid.UUID
+    target: str = Field(min_length=1, max_length=512)
+    protocol: str = Field(default="HTTPS", max_length=16)
+    idempotency_key: str = Field(min_length=1, max_length=128)
 
 
 def _context(
@@ -241,6 +252,17 @@ def get_remediation_task(
         "closure_decisions": [_closure(item) for item in decisions],
         "history": [_event(item) for item in events],
     }
+
+
+@router.post("/remediation/tasks/{task_id}/retest")
+def request_retest_priority(
+    task_id: uuid.UUID,
+    payload: RetestRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    return request_retest(task_id, payload, session, principal, organization_id)
 
 
 @router.post("/remediation/tasks/{task_id}/{action}")
@@ -471,6 +493,94 @@ def path_breaking_candidates(
             for item in candidates
         ],
     }
+
+
+def request_retest(
+    task_id: uuid.UUID,
+    payload: RetestRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "analyst", "admin", "owner")
+    authorization = ScopeGuard(session).authorize(
+        ScopeAuthorizationRequest(
+            principal=principal,
+            organization_id=context.organization_id,
+            scope_id=payload.scope_id,
+            scope_version_id=payload.scope_version_id,
+            approval_id=payload.approval_id,
+            target=payload.target,
+            operation=OperationContext(
+                protocol=payload.protocol,
+                correlation_id=payload.idempotency_key,
+            ),
+            now=datetime.now(UTC),
+        )
+    )
+    if not authorization.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "SCOPE_GUARD_DENIED", "reason": authorization.reason_code},
+        )
+    try:
+        run = VerificationRunService(session).request(
+            context.organization_id,
+            task_id,
+            payload.idempotency_key,
+            datetime.now(UTC),
+            scope_approval_valid=True,
+            emergency_stop=False,
+            actor_user_id=principal.user.id,
+            correlation_id=payload.idempotency_key,
+        )
+        session.commit()
+    except VerificationRunError as exc:
+        session.rollback()
+        message = str(exc)
+        code = (
+            "VERIFICATION_ALREADY_ACTIVE"
+            if "already active" in message
+            else "VERIFICATION_NOT_FOUND"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": code, "message": message},
+        ) from exc
+    return _verification(run)
+
+
+@router.get("/remediation/tasks/{task_id}/verification-runs")
+def list_verification_runs(
+    task_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    task = session.scalar(
+        select(RemediationTask).where(
+            RemediationTask.id == task_id,
+            RemediationTask.organization_id == context.organization_id,
+        )
+    )
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="REMEDIATION_TASK_NOT_FOUND",
+        )
+    runs = list(
+        session.scalars(
+            select(VerificationRun)
+            .where(
+                VerificationRun.organization_id == context.organization_id,
+                VerificationRun.remediation_task_id == task.id,
+            )
+            .order_by(VerificationRun.requested_at.desc(), VerificationRun.id.asc())
+        )
+    )
+    return {"items": [_verification(run) for run in runs]}
 
 
 def _risk(item: RiskAssessment) -> dict[str, object]:

@@ -424,3 +424,39 @@ def test_phase7_attack_path_analysis_and_simulation_are_bounded_and_analytical(
     assert candidates.json()["simulation_only"] is True
     assert candidates.json()["source_system_mutation"] is False
     assert candidates.json()["candidates"] == []
+
+
+def test_phase7_retest_requires_real_scope_guard_approval_and_keeps_runs_scoped(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    own_headers = _headers(identifiers["org_a"])
+    foreign_headers = _headers(identifiers["org_b"])
+    task_id = identifiers["task"]
+    denied = client.post(
+        f"/api/v1/remediation/tasks/{task_id}/retest",
+        json={
+            "scope_id": str(uuid.uuid4()),
+            "scope_version_id": str(uuid.uuid4()),
+            "approval_id": str(uuid.uuid4()),
+            "target": "fixture.example.test",
+            "idempotency_key": "scope-guard-denied-retest",
+        },
+        headers=own_headers,
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "SCOPE_GUARD_DENIED"
+
+    listing = client.get(
+        f"/api/v1/remediation/tasks/{task_id}/verification-runs",
+        headers=own_headers,
+    )
+    assert listing.status_code == 200
+    assert listing.json()["items"] == []
+
+    foreign = client.get(
+        f"/api/v1/remediation/tasks/{task_id}/verification-runs",
+        headers=foreign_headers,
+    )
+    assert foreign.status_code == 404
+    assert foreign.json()["detail"] == "REMEDIATION_TASK_NOT_FOUND"
