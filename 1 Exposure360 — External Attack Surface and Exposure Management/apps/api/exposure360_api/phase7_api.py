@@ -11,8 +11,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .attack_path_analysis import AttackPathScorer
 from .auth import current_principal
 from .db import get_session
+from .graph_traversal import (
+    GRAPH_MAX_HOPS,
+    GRAPH_MAX_PATHS,
+    TRAVERSAL_PROFILES,
+    GraphPath,
+    GraphTraversalService,
+    TraversalProfile,
+    TraversalResult,
+)
 from .models import (
     ClosureDecisionRecord,
     RemediationTask,
@@ -24,6 +34,8 @@ from .models import (
     VerificationRun,
     VerifiedControlEvidence,
 )
+from .path_breaking import PathBreakingSimulator
+from .relationships import ASSET, GraphNodeReference, RelationshipError
 from .remediation import RemediationState
 from .remediation_workflow import RemediationWorkflowError, RemediationWorkflowService
 from .security import (
@@ -46,6 +58,15 @@ class ExceptionRequest(BaseModel):
     remediation_task_id: uuid.UUID | None = None
     rationale: str = Field(min_length=1, max_length=4096)
     expires_at: datetime
+
+
+class AttackPathAnalysisRequest(BaseModel):
+    start_asset_id: uuid.UUID
+    profile: str = Field(default="exposure-to-data-v1", max_length=64)
+    max_hops: int | None = Field(default=None, ge=1, le=GRAPH_MAX_HOPS)
+    max_paths: int = Field(default=100, ge=1, le=GRAPH_MAX_PATHS)
+    min_edge_confidence: float = Field(default=0, ge=0, le=1)
+    effective_at: datetime | None = None
 
 
 def _context(
@@ -380,6 +401,78 @@ def reject_exception(
     return _exception(exception)
 
 
+@router.post("/attack-paths/analyze")
+def analyze_attack_paths(
+    payload: AttackPathAnalysisRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    result, profile = _analyze(session, context, payload)
+    scorer = AttackPathScorer(session)
+    start = GraphNodeReference(ASSET, payload.start_asset_id)
+    blast_radius = scorer.blast_radius(
+        context.organization_id,
+        start_node=start,
+        profile=profile,
+        max_hops=payload.max_hops or profile.max_hops_default,
+        result=result,
+    )
+    return {
+        "analytical_only": True,
+        "exploitability_verified": False,
+        "profile": profile.profile_id,
+        "effective_at": payload.effective_at,
+        "analysis_completeness": "TRUNCATED" if result.truncated else "COMPLETE",
+        "warnings": list(result.warnings),
+        "blast_radius": {
+            "unique_nodes": blast_radius.unique_nodes,
+            "applications": blast_radius.applications,
+            "identities": blast_radius.identities,
+            "data_entities": blast_radius.data_entities,
+            "vulnerabilities": blast_radius.vulnerabilities,
+            "cloud_resources": blast_radius.cloud_resources,
+            "paths": blast_radius.paths,
+            "truncated": blast_radius.truncated,
+        },
+        "paths": [_path(session, context, item) for item in result.paths],
+    }
+
+
+@router.post("/attack-paths/path-breaking-candidates")
+def path_breaking_candidates(
+    payload: AttackPathAnalysisRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    result, profile = _analyze(session, context, payload)
+    candidates = PathBreakingSimulator().evaluate_candidates(result, profile=profile)
+    return {
+        "analytical_only": True,
+        "exploitability_verified": False,
+        "simulation_only": True,
+        "source_system_mutation": False,
+        "profile": profile.profile_id,
+        "candidates": [
+            {
+                "candidate_type": item.candidate_type,
+                "relationship_id": item.relationship_id,
+                "baseline_paths": item.baseline_paths,
+                "remaining_paths": item.remaining_paths,
+                "paths_broken": item.paths_broken,
+                "reduction_percent": item.reduction_percent,
+                "affected_destinations": item.affected_destinations,
+                "simulation_confidence": item.simulation_confidence,
+                "suggested_change_text": item.suggested_change_text,
+            }
+            for item in candidates
+        ],
+    }
+
+
 def _risk(item: RiskAssessment) -> dict[str, object]:
     return {
         "id": str(item.id),
@@ -466,6 +559,63 @@ def _control(item: VerifiedControlEvidence) -> dict[str, object]:
         "confidence": item.confidence,
         "reduction_applied": 0 if state in {"STALE", "INVALID", "REVOKED"} else None,
         "source_reference": item.source_reference,
+    }
+
+
+def _analyze(
+    session: Session,
+    context: OrganizationContext,
+    payload: AttackPathAnalysisRequest,
+) -> tuple[TraversalResult, TraversalProfile]:
+    profile = TRAVERSAL_PROFILES.get(payload.profile)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="INVALID_TRAVERSAL_PROFILE",
+        )
+    try:
+        result = GraphTraversalService(session).traverse(
+            context.organization_id,
+            start_nodes=(GraphNodeReference(ASSET, payload.start_asset_id),),
+            profile=profile,
+            max_hops=payload.max_hops,
+            max_paths=payload.max_paths,
+            min_edge_confidence=payload.min_edge_confidence,
+            effective_at=payload.effective_at,
+        )
+    except RelationshipError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_ATTACK_PATH_REQUEST", "message": str(exc)},
+        ) from exc
+    return result, profile
+
+
+def _path(session: Session, context: OrganizationContext, item: GraphPath) -> dict[str, object]:
+    scorer = AttackPathScorer(session)
+    score = scorer.score_path(context.organization_id, item)
+    confidence = scorer.path_confidence(item)
+    return {
+        "path_key": item.path_key,
+        "hop_count": item.hop_count,
+        "nodes": [{"kind": node.kind, "id": str(node.node_id)} for node in item.nodes],
+        "relationships": [
+            {
+                "id": edge.relationship_id,
+                "relationship_type": edge.relationship_type,
+                "confidence": edge.confidence,
+            }
+            for edge in item.edges
+        ],
+        "attack_path_score": score.score,
+        "attack_path_score_model_version": score.model_version,
+        "score_factors": [
+            {"factor": factor.factor, "points": factor.points} for factor in score.factors
+        ],
+        "path_confidence": confidence.combined_confidence,
+        "low_confidence_relationship_ids": list(confidence.low_confidence_edges),
+        "analytical_only": True,
+        "exploitability_verified": False,
     }
 
 

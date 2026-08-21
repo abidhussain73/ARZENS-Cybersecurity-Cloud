@@ -239,6 +239,7 @@ def api_client(
             {
                 "org_a": organization_a.id,
                 "org_b": organization_b.id,
+                "asset": primary_asset.id,
                 "risk": risk.id,
                 "finding": primary_finding_id,
                 "task": task.id,
@@ -392,3 +393,34 @@ def test_phase7_exception_request_list_approval_and_rbac(
 
     denied = client.post(f"/api/v1/exceptions/{exception_id}/reject", headers=foreign_headers)
     assert denied.status_code == 403
+
+
+def test_phase7_attack_path_analysis_and_simulation_are_bounded_and_analytical(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+    payload = {
+        "start_asset_id": str(identifiers["asset"]),
+        "profile": "exposure-to-data-v1",
+        "max_hops": 2,
+        "max_paths": 10,
+        "min_edge_confidence": 0.5,
+    }
+
+    analysis = client.post("/api/v1/attack-paths/analyze", json=payload, headers=headers)
+    assert analysis.status_code == 200
+    assert analysis.json()["analytical_only"] is True
+    assert analysis.json()["exploitability_verified"] is False
+    assert analysis.json()["analysis_completeness"] == "COMPLETE"
+    assert analysis.json()["paths"] == []
+
+    candidates = client.post(
+        "/api/v1/attack-paths/path-breaking-candidates",
+        json=payload,
+        headers=headers,
+    )
+    assert candidates.status_code == 200
+    assert candidates.json()["simulation_only"] is True
+    assert candidates.json()["source_system_mutation"] is False
+    assert candidates.json()["candidates"] == []
