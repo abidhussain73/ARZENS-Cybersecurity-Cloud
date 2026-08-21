@@ -89,7 +89,7 @@
 - [x] EX360-T055: Implement bounded graph traversal with max hops, allowed edges, organization isolation, and cycle protection.
 - [x] EX360-T056: Implement deterministic attack-path score, confidence, and blast-radius summary.
 - [x] EX360-T057: Implement analytical path-breaking candidate simulation without source-system mutation.
-- [ ] Produce Phase 6 documentation, regression, AWS synthetic acceptance, protected GitHub publication, and self-contained archive without starting Phase 7.
+- [x] Produce Phase 6 documentation, regression, AWS synthetic acceptance, protected GitHub publication, and self-contained archive without starting Phase 7.
 - [ ] EX360-T058: Implement factor-availability-aware contextual risk scoring.
 - [ ] EX360-T059: Implement verified-control reduction with freshness and confidence handling.
 - [ ] EX360-T060: Create remediation task, exception, and SLA models with state enforcement.

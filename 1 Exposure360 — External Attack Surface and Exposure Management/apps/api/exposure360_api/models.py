@@ -1732,6 +1732,88 @@ class RelationshipEvidenceLink(Base):
     linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class RiskAssessment(Base):
+    __tablename__ = "risk_assessments"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_risk_assessment_id_org"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_risk_assessment_finding_org",
+        ),
+        CheckConstraint("raw_score >= 0 AND raw_score <= 100", name="ck_risk_assessment_raw_score"),
+        CheckConstraint(
+            "adjusted_score >= 0 AND adjusted_score <= 100",
+            name="ck_risk_assessment_adjusted_score",
+        ),
+        CheckConstraint(
+            "factor_coverage >= 0 AND factor_coverage <= 1",
+            name="ck_risk_assessment_factor_coverage",
+        ),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1", name="ck_risk_assessment_confidence"
+        ),
+        Index(
+            "ix_risk_assessments_org_finding_time", "organization_id", "finding_id", "evaluated_at"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    service_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    model_version: Mapped[str] = mapped_column(String(64))
+    registry_hash: Mapped[str] = mapped_column(String(64))
+    raw_score: Mapped[float] = mapped_column(Float)
+    adjusted_score: Mapped[float] = mapped_column(Float)
+    factor_coverage: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    risk_band: Mapped[str] = mapped_column(String(32))
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    explanation_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RiskFactorResult(Base):
+    __tablename__ = "risk_factor_results"
+    __table_args__ = (
+        UniqueConstraint("risk_assessment_id", "factor_key", name="uq_risk_factor_assessment_key"),
+        ForeignKeyConstraint(
+            ["risk_assessment_id", "organization_id"],
+            ["risk_assessments.id", "risk_assessments.organization_id"],
+            name="fk_risk_factor_assessment_org",
+        ),
+        CheckConstraint(
+            "availability IN ('AVAILABLE', 'MISSING', 'STALE', 'INVALID', 'NOT_APPLICABLE')",
+            name="ck_risk_factor_availability",
+        ),
+        CheckConstraint(
+            "normalized_value IS NULL OR (normalized_value >= 0 AND normalized_value <= 1)",
+            name="ck_risk_factor_normalized_value",
+        ),
+        CheckConstraint(
+            "factor_confidence >= 0 AND factor_confidence <= 1",
+            name="ck_risk_factor_confidence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    risk_assessment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    factor_key: Mapped[str] = mapped_column(String(128))
+    availability: Mapped[str] = mapped_column(String(32))
+    raw_value_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    normalized_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    configured_weight: Mapped[float] = mapped_column(Float)
+    effective_weight: Mapped[float] = mapped_column(Float)
+    contribution: Mapped[float] = mapped_column(Float)
+    factor_confidence: Mapped[float] = mapped_column(Float)
+    evidence_reference_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    reason_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)
