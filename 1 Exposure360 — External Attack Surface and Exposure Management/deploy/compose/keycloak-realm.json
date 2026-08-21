@@ -36,8 +36,8 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "redirectUris": ["http://localhost:5173/*", "http://127.0.0.1:8080/*", "http://localhost:8080/*"],
-      "webOrigins": ["http://localhost:8080"],
+      "redirectUris": ["${MANAGED_DASHBOARD_ORIGIN}/*", "${PUBLIC_GATEWAY_URL}/*"],
+      "webOrigins": ["${MANAGED_DASHBOARD_ORIGIN}", "${PUBLIC_GATEWAY_URL}"],
       "defaultClientScopes": ["exposure360-phase1-api"],
       "attributes": {"pkce.code.challenge.method": "S256"}
     }

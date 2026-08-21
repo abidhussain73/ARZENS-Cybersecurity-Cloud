@@ -1,0 +1,41 @@
+{
+	auto_https disable_redirects
+}
+
+{$GATEWAY_HOST:localhost} {
+	tls internal
+	encode zstd gzip
+
+	@phase7_preflight {
+		method OPTIONS
+		path /api/*
+	}
+	handle @phase7_preflight {
+		header Access-Control-Allow-Origin "{$MANAGED_DASHBOARD_ORIGIN}"
+		header Access-Control-Allow-Headers "Authorization, Content-Type, X-Organization-ID, X-Correlation-ID"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		header Access-Control-Max-Age "600"
+		header Vary "Origin"
+		respond "" 204
+	}
+
+	@phase7_api path /api/*
+	handle @phase7_api {
+		header Access-Control-Allow-Origin "{$MANAGED_DASHBOARD_ORIGIN}"
+		header Access-Control-Expose-Headers "X-Correlation-ID"
+		header Vary "Origin"
+		reverse_proxy api:8000
+	}
+
+	@identity path /realms/* /resources/* /js/*
+	handle @identity {
+		reverse_proxy identity:8080
+	}
+
+	handle /gateway/health {
+		rewrite * /health/live
+		reverse_proxy api:8000
+	}
+
+	respond "Not found" 404
+}

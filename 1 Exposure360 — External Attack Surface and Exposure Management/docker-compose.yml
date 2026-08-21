@@ -16,7 +16,12 @@ services:
   identity:
     image: quay.io/keycloak/keycloak:26.0
     command: start-dev --import-realm
-    environment: {KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: local-keycloak-admin-only}
+    env_file: deploy/compose/local.env.template
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: local-keycloak-admin-only
+      KC_HOSTNAME: ${PUBLIC_GATEWAY_URL:-https://localhost:8443}
+      KC_PROXY_HEADERS: xforwarded
     volumes: [./deploy/compose/keycloak-realm.json:/opt/keycloak/data/import/exposure360-realm.json:ro]
     ports: ["127.0.0.1:8081:8080"]
   otel:
@@ -38,4 +43,13 @@ services:
       VITE_OIDC_ISSUER_URL: http://127.0.0.1:8081/realms/exposure360
       VITE_OIDC_CLIENT_ID: exposure360-web
     ports: ["127.0.0.1:8080:5173"]
-volumes: {postgres_data: {}, minio_data: {}}
+  gateway:
+    image: caddy:2.8-alpine
+    env_file: deploy/compose/local.env.template
+    depends_on: {api: {condition: service_started}, identity: {condition: service_started}}
+    ports: ["${GATEWAY_BIND_ADDRESS:-127.0.0.1}:${GATEWAY_HOST_PORT:-8443}:443"]
+    volumes:
+      - ./deploy/compose/${GATEWAY_CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes: {postgres_data: {}, minio_data: {}, caddy_data: {}, caddy_config: {}}

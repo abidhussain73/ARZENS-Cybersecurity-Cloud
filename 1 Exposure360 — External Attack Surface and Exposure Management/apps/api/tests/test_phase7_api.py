@@ -24,6 +24,7 @@ from exposure360_api.models import (
     VerifiedControlEvidence,
 )
 from exposure360_api.security import Principal
+from exposure360_api.verification_run import VerificationResult, VerificationRunService
 
 NOW = datetime(2026, 8, 21, 12, tzinfo=UTC)
 
@@ -376,6 +377,22 @@ def test_phase7_remediation_actions_use_named_state_machine_endpoints(
     assert viewer.status_code == 403
 
 
+def test_phase7_invalid_remediation_transition_returns_contract_error(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+
+    invalid = client.post(
+        f"/api/v1/remediation/tasks/{identifiers['task']}/resolve-pending-verification",
+        json={"reason": "A task cannot be resolved before it is in progress."},
+        headers=headers,
+    )
+
+    assert invalid.status_code == 409
+    assert invalid.json()["detail"]["code"] == "INVALID_REMEDIATION_TRANSITION"
+
+
 def test_phase7_remediation_task_create_derives_priority_and_versioned_sla(
     api_client: tuple[TestClient, dict[str, uuid.UUID]],
 ) -> None:
@@ -517,3 +534,187 @@ def test_phase7_retest_requires_real_scope_guard_approval_and_keeps_runs_scoped(
     missing_run = client.get(f"/api/v1/verification-runs/{uuid.uuid4()}", headers=own_headers)
     assert missing_run.status_code == 404
     assert missing_run.json()["detail"] == "VERIFICATION_NOT_FOUND"
+
+
+def test_phase7_verification_detail_shows_denied_closure_without_current_evidence(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+    database_session: Session,
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+    task_id = identifiers["task"]
+
+    for action in ("plan", "start", "resolve-pending-verification"):
+        transition = client.post(
+            f"/api/v1/remediation/tasks/{task_id}/{action}",
+            json={"reason": "Fixture workflow transition."},
+            headers=headers,
+        )
+        assert transition.status_code == 200
+
+    service = VerificationRunService(database_session)
+    run = service.request(
+        identifiers["org_a"],
+        task_id,
+        "closure-denied-no-current-evidence",
+        NOW,
+        scope_approval_valid=True,
+        emergency_stop=False,
+    )
+    database_session.flush()
+    completion = service.complete(
+        identifiers["org_a"],
+        run.id,
+        NOW + timedelta(minutes=5),
+        result=VerificationResult.CONDITION_ABSENT,
+        evidence_collected_at=None,
+        evidence_integrity_valid=False,
+        collection_complete=False,
+        scope_approval_valid=True,
+        correct_target=True,
+    )
+    database_session.commit()
+
+    detail = client.get(f"/api/v1/verification-runs/{run.id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["state"] == "COMPLETED"
+    assert detail.json()["result"] == "CONDITION_ABSENT"
+    assert detail.json()["closure_decision"]["decision"] == "INCONCLUSIVE"
+    assert "EVIDENCE_STALE" in completion.closure.reason_codes
+
+    task_detail = client.get(f"/api/v1/remediation/tasks/{task_id}", headers=headers)
+    assert task_detail.status_code == 200
+    assert task_detail.json()["task"]["state"] == "RESOLVED_PENDING_VERIFICATION"
+    assert task_detail.json()["closure_decisions"][0]["decision"] == "INCONCLUSIVE"
+
+
+def test_phase7_verification_detail_shows_verified_closure_with_current_evidence(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+    database_session: Session,
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+    task_id = identifiers["task"]
+
+    for action in ("plan", "start", "resolve-pending-verification"):
+        transition = client.post(
+            f"/api/v1/remediation/tasks/{task_id}/{action}",
+            json={"reason": "Fixture workflow transition."},
+            headers=headers,
+        )
+        assert transition.status_code == 200
+
+    service = VerificationRunService(database_session)
+    run = service.request(
+        identifiers["org_a"],
+        task_id,
+        "closure-allowed-current-evidence",
+        NOW,
+        scope_approval_valid=True,
+        emergency_stop=False,
+    )
+    database_session.flush()
+    completion = service.complete(
+        identifiers["org_a"],
+        run.id,
+        NOW + timedelta(minutes=5),
+        result=VerificationResult.CONDITION_ABSENT,
+        evidence_collected_at=NOW + timedelta(minutes=1),
+        evidence_integrity_valid=True,
+        collection_complete=True,
+        scope_approval_valid=True,
+        correct_target=True,
+    )
+    database_session.commit()
+
+    detail = client.get(f"/api/v1/verification-runs/{run.id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["closure_decision"]["decision"] == "ALLOW_CLOSE"
+    assert completion.closure.reason_codes == ()
+
+    task_detail = client.get(f"/api/v1/remediation/tasks/{task_id}", headers=headers)
+    assert task_detail.status_code == 200
+    assert task_detail.json()["task"]["state"] == "CLOSED"
+    assert task_detail.json()["closure_decisions"][0]["decision"] == "ALLOW_CLOSE"
+
+    finding_risk = client.get(
+        f"/api/v1/findings/{identifiers['finding']}/risk",
+        headers=headers,
+    )
+    assert finding_risk.status_code == 200
+
+
+def test_phase7_cross_organization_denies_all_individual_resource_types(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    own_headers = _headers(identifiers["org_a"])
+    foreign_headers = _headers(identifiers["org_b"])
+
+    own_task = client.get(f"/api/v1/remediation/tasks/{identifiers['task']}", headers=own_headers)
+    assert own_task.status_code == 200
+
+    foreign_task = client.get(
+        f"/api/v1/remediation/tasks/{identifiers['task']}",
+        headers=foreign_headers,
+    )
+    assert foreign_task.status_code == 404
+    assert foreign_task.json()["detail"] == "REMEDIATION_TASK_NOT_FOUND"
+
+    foreign_sla = client.get(
+        f"/api/v1/remediation/tasks/{identifiers['task']}/sla",
+        headers=foreign_headers,
+    )
+    assert foreign_sla.status_code == 404
+    assert foreign_sla.json()["detail"] == "SLA_NOT_FOUND"
+
+    foreign_risk = client.get(f"/api/v1/risks/{identifiers['risk']}", headers=foreign_headers)
+    assert foreign_risk.status_code == 404
+    assert foreign_risk.json()["detail"] == "RISK_NOT_FOUND"
+
+
+def test_phase7_list_pagination_and_openapi_cover_all_registered_routes(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    headers = _headers(identifiers["org_a"])
+
+    for index in range(2):
+        created = client.post(
+            "/api/v1/remediation/tasks",
+            json={
+                "finding_id": str(identifiers["finding"]),
+                "title": f"Pagination fixture task {index}",
+            },
+            headers=headers,
+        )
+        assert created.status_code == 200
+
+    tasks = client.get("/api/v1/remediation/tasks?offset=1&limit=1", headers=headers)
+    assert tasks.status_code == 200
+    assert tasks.json()["page"] == {"offset": 1, "limit": 1, "total": 3}
+    assert len(tasks.json()["items"]) == 1
+
+    openapi = client.get("/api/v1/openapi.json")
+    assert openapi.status_code == 200
+    paths = openapi.json()["paths"]
+    expected_paths = {
+        "/api/v1/risks",
+        "/api/v1/risks/{risk_assessment_id}",
+        "/api/v1/findings/{finding_id}/risk",
+        "/api/v1/remediation/tasks",
+        "/api/v1/remediation/tasks/{task_id}",
+        "/api/v1/remediation/tasks/{task_id}/retest",
+        "/api/v1/remediation/tasks/{task_id}/{action}",
+        "/api/v1/remediation/tasks/{task_id}/verification-runs",
+        "/api/v1/remediation/tasks/{task_id}/sla",
+        "/api/v1/exceptions",
+        "/api/v1/exceptions/{exception_id}/approve",
+        "/api/v1/exceptions/{exception_id}/reject",
+        "/api/v1/exceptions/{exception_id}/revoke",
+        "/api/v1/attack-paths",
+        "/api/v1/attack-paths/analyze",
+        "/api/v1/attack-paths/path-breaking-candidates",
+        "/api/v1/verification-runs/{verification_run_id}",
+    }
+    assert expected_paths.issubset(paths)

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     objectstore_access_key: str = Field(min_length=1)
     objectstore_secret_key: str = Field(min_length=1)
     oidc_issuer_url: AnyHttpUrl
+    oidc_jwks_url: AnyHttpUrl | None = None
     oidc_client_id: str = Field(min_length=1)
     oidc_client_secret: str = Field(min_length=1)
     oidc_audience: str = Field(min_length=1)

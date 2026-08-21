@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .attack_path_analysis import AttackPathScorer
 from .auth import current_principal
 from .db import get_session
+from .findings import FindingService, FindingStateError
 from .graph_traversal import (
     GRAPH_MAX_HOPS,
     GRAPH_MAX_PATHS,
@@ -25,6 +26,7 @@ from .graph_traversal import (
 )
 from .models import (
     ClosureDecisionRecord,
+    Finding,
     RemediationTask,
     RemediationTaskEvent,
     RiskAcceptanceException,
@@ -37,7 +39,7 @@ from .models import (
 )
 from .path_breaking import PathBreakingSimulator
 from .relationships import ASSET, GraphNodeReference, RelationshipError
-from .remediation import RemediationState
+from .remediation import RemediationState, RemediationTransitionError
 from .remediation_workflow import (
     RemediationWorkflowError,
     RemediationWorkflowService,
@@ -360,8 +362,29 @@ def transition_remediation_task(
             actor_user_id=principal.user.id,
             reason=payload.reason,
         )
+        finding_target = {
+            RemediationState.IN_PROGRESS: "IN_PROGRESS",
+            RemediationState.RESOLVED_PENDING_VERIFICATION: "RESOLVED_PENDING_VERIFICATION",
+        }.get(target)
+        finding = None
+        if finding_target is not None:
+            finding = session.scalar(
+                select(Finding).where(
+                    Finding.id == task.finding_id,
+                    Finding.organization_id == context.organization_id,
+                )
+            )
+        if finding is not None and finding_target is not None and finding.state != finding_target:
+            FindingService(session).transition(
+                context,
+                principal,
+                finding.id,
+                finding_target,
+                payload.reason or f"remediation-task-{action}",
+                reason=payload.reason,
+            )
         session.commit()
-    except RemediationWorkflowError as exc:
+    except (FindingStateError, RemediationTransitionError, RemediationWorkflowError) as exc:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -751,7 +774,15 @@ def get_verification_run(
     )
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VERIFICATION_NOT_FOUND")
-    return _verification(run)
+    closure = session.scalar(
+        select(ClosureDecisionRecord).where(
+            ClosureDecisionRecord.organization_id == context.organization_id,
+            ClosureDecisionRecord.verification_run_id == run.id,
+        )
+    )
+    detail = _verification(run)
+    detail["closure_decision"] = _closure(closure) if closure is not None else None
+    return detail
 
 
 def _risk(item: RiskAssessment) -> dict[str, object]:

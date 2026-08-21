@@ -22,22 +22,25 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 class OidcVerifier:
     """Verifies bearer tokens using the configured issuer discovery document and cached JWKS."""
 
-    def __init__(self, issuer: str, audience: str) -> None:
+    def __init__(self, issuer: str, audience: str, jwks_url: str | None = None) -> None:
         self.issuer = issuer.rstrip("/")
         self.audience = audience
-        discovery_url = f"{self.issuer}/.well-known/openid-configuration"
-        try:
-            response = httpx.get(discovery_url, timeout=5.0)
-            response.raise_for_status()
-            discovery: dict[str, Any] = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            raise RuntimeError("OIDC discovery is unavailable") from exc
+        if jwks_url is None:
+            discovery_url = f"{self.issuer}/.well-known/openid-configuration"
+            try:
+                response = httpx.get(discovery_url, timeout=5.0)
+                response.raise_for_status()
+                discovery: dict[str, Any] = response.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                raise RuntimeError("OIDC discovery is unavailable") from exc
 
-        if discovery.get("issuer") != self.issuer:
-            raise RuntimeError("OIDC discovery issuer does not match configured issuer")
-        jwks_uri = discovery.get("jwks_uri")
-        if not isinstance(jwks_uri, str) or not jwks_uri.startswith(("http://", "https://")):
-            raise RuntimeError("OIDC discovery did not provide a valid JWKS URI")
+            if discovery.get("issuer") != self.issuer:
+                raise RuntimeError("OIDC discovery issuer does not match configured issuer")
+            jwks_uri = discovery.get("jwks_uri")
+            if not isinstance(jwks_uri, str) or not jwks_uri.startswith(("http://", "https://")):
+                raise RuntimeError("OIDC discovery did not provide a valid JWKS URI")
+        else:
+            jwks_uri = jwks_url
 
         # PyJWT caches signing keys and refreshes the JWKS on an unknown key ID.
         self._jwks_client = PyJWKClient(jwks_uri, cache_keys=True, lifespan=300)
@@ -58,7 +61,8 @@ class OidcVerifier:
 @lru_cache
 def get_oidc_verifier() -> OidcVerifier:
     settings = get_settings()
-    return OidcVerifier(str(settings.oidc_issuer_url), settings.oidc_audience)
+    jwks_url = str(settings.oidc_jwks_url) if settings.oidc_jwks_url is not None else None
+    return OidcVerifier(str(settings.oidc_issuer_url), settings.oidc_audience, jwks_url)
 
 
 def _safe_string_claim(claims: dict[str, Any], name: str) -> str | None:
