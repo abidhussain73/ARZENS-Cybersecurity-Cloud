@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -22,9 +24,21 @@ from .models import (
     VerificationRun,
     VerifiedControlEvidence,
 )
-from .security import OrganizationContext, Principal, organization_header, require_org_context
+from .remediation import RemediationState
+from .remediation_workflow import RemediationWorkflowError, RemediationWorkflowService
+from .security import (
+    OrganizationContext,
+    Principal,
+    organization_header,
+    require_org_context,
+    require_role,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["phase-7"])
+
+
+class RemediationTransitionRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2048)
 
 
 def _context(
@@ -199,6 +213,49 @@ def get_remediation_task(
         "closure_decisions": [_closure(item) for item in decisions],
         "history": [_event(item) for item in events],
     }
+
+
+@router.post("/remediation/tasks/{task_id}/{action}")
+def transition_remediation_task(
+    task_id: uuid.UUID,
+    action: str,
+    payload: RemediationTransitionRequest,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    require_role(context, "analyst", "admin", "owner")
+    targets = {
+        "plan": RemediationState.PLANNED,
+        "start": RemediationState.IN_PROGRESS,
+        "block": RemediationState.BLOCKED,
+        "resolve-pending-verification": RemediationState.RESOLVED_PENDING_VERIFICATION,
+        "cancel": RemediationState.CANCELLED,
+    }
+    target = targets.get(action)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="REMEDIATION_ACTION_NOT_FOUND",
+        )
+    try:
+        task = RemediationWorkflowService(session).transition(
+            context.organization_id,
+            task_id,
+            target,
+            datetime.now(UTC),
+            actor_user_id=principal.user.id,
+            reason=payload.reason,
+        )
+        session.commit()
+    except RemediationWorkflowError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "INVALID_REMEDIATION_TRANSITION", "message": str(exc)},
+        ) from exc
+    return _task(task)
 
 
 def _risk(item: RiskAssessment) -> dict[str, object]:

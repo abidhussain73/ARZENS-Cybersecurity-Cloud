@@ -206,7 +206,7 @@ def api_client(
         source_relationship_id=None,
         title="Review HSTS remediation",
         description="Track approved remediation only.",
-        state="IN_PROGRESS",
+        state="OPEN",
         priority="P2",
         owner_user_id=None,
         opened_at=NOW,
@@ -310,7 +310,7 @@ def test_phase7_remediation_task_detail_is_organization_scoped(
 
     detail = client.get(f"/api/v1/remediation/tasks/{identifiers['task']}", headers=own_headers)
     assert detail.status_code == 200
-    assert detail.json()["task"]["state"] == "IN_PROGRESS"
+    assert detail.json()["task"]["state"] == "OPEN"
     assert detail.json()["sla"] is None
     assert detail.json()["history"] == []
     assert detail.json()["verification_runs"] == []
@@ -319,3 +319,43 @@ def test_phase7_remediation_task_detail_is_organization_scoped(
     denied = client.get(f"/api/v1/remediation/tasks/{identifiers['task']}", headers=foreign_headers)
     assert denied.status_code == 404
     assert denied.json()["detail"] == "REMEDIATION_TASK_NOT_FOUND"
+
+
+def test_phase7_remediation_actions_use_named_state_machine_endpoints(
+    api_client: tuple[TestClient, dict[str, uuid.UUID]],
+) -> None:
+    client, identifiers = api_client
+    own_headers = _headers(identifiers["org_a"])
+    foreign_headers = _headers(identifiers["org_b"])
+    task_id = identifiers["task"]
+
+    planned = client.post(
+        f"/api/v1/remediation/tasks/{task_id}/plan",
+        json={"reason": "Owner plan recorded."},
+        headers=own_headers,
+    )
+    assert planned.status_code == 200
+    assert planned.json()["state"] == "PLANNED"
+
+    started = client.post(
+        f"/api/v1/remediation/tasks/{task_id}/start",
+        json={},
+        headers=own_headers,
+    )
+    assert started.status_code == 200
+    assert started.json()["state"] == "IN_PROGRESS"
+
+    unsupported = client.post(
+        f"/api/v1/remediation/tasks/{task_id}/close",
+        json={},
+        headers=own_headers,
+    )
+    assert unsupported.status_code == 404
+    assert unsupported.json()["detail"] == "REMEDIATION_ACTION_NOT_FOUND"
+
+    viewer = client.post(
+        f"/api/v1/remediation/tasks/{task_id}/block",
+        json={},
+        headers=foreign_headers,
+    )
+    assert viewer.status_code == 403
