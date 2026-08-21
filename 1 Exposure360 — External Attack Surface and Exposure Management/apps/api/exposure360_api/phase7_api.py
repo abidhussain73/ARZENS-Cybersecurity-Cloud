@@ -714,6 +714,27 @@ def list_verification_runs(
     return {"items": [_verification(run) for run in runs]}
 
 
+@router.get("/remediation/tasks/{task_id}/sla")
+def get_task_sla(
+    task_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    sla = session.scalar(
+        select(SlaInstance).where(
+            SlaInstance.organization_id == context.organization_id,
+            SlaInstance.remediation_task_id == task_id,
+        )
+    )
+    if sla is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SLA_NOT_FOUND")
+    serialized = _sla(sla)
+    assert serialized is not None
+    return serialized
+
+
 @router.get("/verification-runs/{verification_run_id}")
 def get_verification_run(
     verification_run_id: uuid.UUID,
@@ -909,13 +930,19 @@ def _sla(item: SlaInstance | None) -> dict[str, object] | None:
     return {
         "policy_version": item.policy_version,
         "state": item.state,
-        "started_at": item.started_at,
-        "resolve_due_at": item.resolve_due_at,
-        "verify_due_at": item.verify_due_at,
-        "final_due_at": item.final_due_at,
-        "paused_at": item.paused_at,
+        "started_at": _utc_value(item.started_at),
+        "resolve_due_at": _utc_value(item.resolve_due_at),
+        "verify_due_at": _utc_value(item.verify_due_at),
+        "final_due_at": _utc_value(item.final_due_at),
+        "paused_at": _utc_value(item.paused_at),
         "paused_duration_seconds": item.paused_duration_seconds,
     }
+
+
+def _utc_value(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _verification(item: VerificationRun) -> dict[str, object]:

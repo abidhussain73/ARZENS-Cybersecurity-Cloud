@@ -395,6 +395,11 @@ def test_phase7_remediation_task_create_derives_priority_and_versioned_sla(
     assert created.json()["priority"] == "P2"
     assert created.json()["due_at"] is not None
 
+    sla = client.get(f"/api/v1/remediation/tasks/{created.json()['id']}/sla", headers=headers)
+    assert sla.status_code == 200
+    assert sla.json()["policy_version"] == 1
+    assert sla.json()["final_due_at"] == created.json()["due_at"]
+
 
 def test_phase7_exception_request_list_approval_and_rbac(
     api_client: tuple[TestClient, dict[str, uuid.UUID]],
