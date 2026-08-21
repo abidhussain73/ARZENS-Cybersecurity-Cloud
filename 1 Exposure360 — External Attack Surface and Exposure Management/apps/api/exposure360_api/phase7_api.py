@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -483,6 +483,50 @@ def reject_exception(
             detail={"code": "INVALID_EXCEPTION_TRANSITION", "message": str(exc)},
         ) from exc
     return _exception(exception)
+
+
+@router.get("/attack-paths")
+def list_attack_paths(
+    start_asset_id: uuid.UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(current_principal)],
+    organization_id: Annotated[str | None, Depends(organization_header)],
+    profile: str = Query(default="exposure-to-data-v1", max_length=64),
+    min_score: int = Query(default=0, ge=0, le=100),
+    min_confidence: float = Query(default=0, ge=0, le=1),
+    max_hops: int | None = Query(default=None, ge=1, le=GRAPH_MAX_HOPS),
+    limit: int = Query(default=50, ge=1, le=100),
+    effective_at: datetime | None = None,
+) -> dict[str, object]:
+    context = _context(session, principal, organization_id)
+    result, selected_profile = _analyze(
+        session,
+        context,
+        AttackPathAnalysisRequest(
+            start_asset_id=start_asset_id,
+            profile=profile,
+            max_hops=max_hops,
+            max_paths=limit,
+            min_edge_confidence=min_confidence,
+            effective_at=effective_at,
+        ),
+    )
+    paths = [_path(session, context, item) for item in result.paths]
+    filtered = [
+        item
+        for item in paths
+        if cast(int, item["attack_path_score"]) >= min_score
+        and cast(float, item["path_confidence"]) >= min_confidence
+    ]
+    return {
+        "items": filtered,
+        "page": {"offset": 0, "limit": limit, "total": len(filtered)},
+        "profile": selected_profile.profile_id,
+        "analytical_only": True,
+        "exploitability_verified": False,
+        "analysis_completeness": "TRUNCATED" if result.truncated else "COMPLETE",
+        "warnings": list(result.warnings),
+    }
 
 
 @router.post("/attack-paths/analyze")

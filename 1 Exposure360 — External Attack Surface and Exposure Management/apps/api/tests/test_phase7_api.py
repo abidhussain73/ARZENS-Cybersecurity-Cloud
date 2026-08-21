@@ -459,6 +459,15 @@ def test_phase7_attack_path_analysis_and_simulation_are_bounded_and_analytical(
     assert candidates.json()["source_system_mutation"] is False
     assert candidates.json()["candidates"] == []
 
+    listing = client.get(
+        f"/api/v1/attack-paths?start_asset_id={identifiers['asset']}&limit=10",
+        headers=headers,
+    )
+    assert listing.status_code == 200
+    assert listing.json()["analytical_only"] is True
+    assert listing.json()["exploitability_verified"] is False
+    assert listing.json()["items"] == []
+
 
 def test_phase7_retest_requires_real_scope_guard_approval_and_keeps_runs_scoped(
     api_client: tuple[TestClient, dict[str, uuid.UUID]],
