@@ -1855,6 +1855,157 @@ class VerifiedControlEvidence(Base):
     )
 
 
+class RemediationTask(Base):
+    __tablename__ = "remediation_tasks"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_remediation_task_id_org"),
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_remediation_task_finding_org",
+        ),
+        CheckConstraint(
+            "state IN ('OPEN', 'PLANNED', 'IN_PROGRESS', 'BLOCKED', "
+            "'RESOLVED_PENDING_VERIFICATION', 'VERIFIED', 'CLOSED', 'CANCELLED')",
+            name="ck_remediation_task_state",
+        ),
+        CheckConstraint(
+            "priority IN ('P1', 'P2', 'P3', 'P4')", name="ck_remediation_task_priority"
+        ),
+        Index("ix_remediation_tasks_org_state_due", "organization_id", "state", "due_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_path_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_relationship_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(1024))
+    description: Mapped[str | None] = mapped_column(String(8192), nullable=True)
+    state: Mapped[str] = mapped_column(String(40), default="OPEN")
+    priority: Mapped[str] = mapped_column(String(4))
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_pending_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RemediationTaskEvent(Base):
+    __tablename__ = "remediation_task_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["remediation_task_id", "organization_id"],
+            ["remediation_tasks.id", "remediation_tasks.organization_id"],
+            name="fk_remediation_task_event_task_org",
+        ),
+        Index("ix_remediation_task_events_org_task", "organization_id", "remediation_task_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    remediation_task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    event_type: Mapped[str] = mapped_column(String(128))
+    from_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    to_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RiskAcceptanceException(Base):
+    __tablename__ = "risk_acceptance_exceptions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["finding_id", "organization_id"],
+            ["findings.id", "findings.organization_id"],
+            name="fk_risk_exception_finding_org",
+        ),
+        CheckConstraint(
+            "state IN ('REQUESTED', 'APPROVED', 'REJECTED', 'REVOKED', 'EXPIRED')",
+            name="ck_risk_exception_state",
+        ),
+        Index("ix_risk_exception_org_state_expiry", "organization_id", "state", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    finding_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    remediation_task_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    state: Mapped[str] = mapped_column(String(16), default="REQUESTED")
+    requested_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    rationale: Mapped[str] = mapped_column(String(4096))
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SlaPolicy(Base):
+    __tablename__ = "sla_policies"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "policy_key", "version", name="uq_sla_policy_org_key_ver"
+        ),
+        CheckConstraint("priority IN ('P1', 'P2', 'P3', 'P4')", name="ck_sla_policy_priority"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    policy_key: Mapped[str] = mapped_column(String(128))
+    version: Mapped[int] = mapped_column(Integer)
+    priority: Mapped[str] = mapped_column(String(4))
+    acknowledge_within_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    start_within_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolve_within_seconds: Mapped[int] = mapped_column(Integer)
+    verify_within_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SlaInstance(Base):
+    __tablename__ = "sla_instances"
+    __table_args__ = (
+        UniqueConstraint("remediation_task_id", name="uq_sla_instance_task"),
+        ForeignKeyConstraint(
+            ["remediation_task_id", "organization_id"],
+            ["remediation_tasks.id", "remediation_tasks.organization_id"],
+            name="fk_sla_instance_task_org",
+        ),
+        Index("ix_sla_instances_org_state_due", "organization_id", "state", "final_due_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    remediation_task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    policy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    policy_version: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolve_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verify_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    final_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    state: Mapped[str] = mapped_column(String(32), default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 @event.listens_for(Evidence, "before_update")
 def _prevent_evidence_integrity_mutation(_: object, __: object, target: Evidence) -> None:
     state = inspect(target)
